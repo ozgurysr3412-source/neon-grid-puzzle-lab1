@@ -1,0 +1,475 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#09071a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Grid Crown" />
+    <title>Grid Crown: Block Puzzle</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./assets/icons/icon-180.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Baloo+2:wght@800&family=Cinzel:wght@700;800;900&family=Rajdhani:wght@500;600;700&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles/main.css?v=20260511nosplash1" />
+    <link rel="stylesheet" href="./styles/journey.css?v=20260430journey8" />
+  </head>
+  <body>
+    <div class="app-shell" id="game-shell">
+      <header class="top-strip">
+        <div class="profile-badge" aria-label="Best score badge">
+          <span class="badge-crown" aria-hidden="true">&#x1F451;</span>
+          <span class="badge-value" id="best-value">0</span>
+        </div>
+        <div class="top-strip-actions">
+          <button id="photo-picker-quick-btn" class="settings-btn photo-quick-btn" aria-label="Choose board photo" title="Choose board photo">
+            <span aria-hidden="true">&#128444;</span>
+          </button>
+          <button
+            id="photo-picker-clear-btn"
+            class="settings-btn photo-clear-btn is-hidden"
+            aria-label="Remove board photo"
+            title="Remove board photo"
+          >
+            <span aria-hidden="true">&#10006;</span>
+          </button>
+          <button id="pause-btn" class="settings-btn" aria-label="Settings/Pause">&#9881;</button>
+        </div>
+      </header>
+
+      <section class="score-stage">
+        <p class="score-title">Score</p>
+        <h1 class="score-value" id="score-value">0</h1>
+      </section>
+      <section class="adventure-hud" id="adventure-hud" aria-label="Adventure goals"></section>
+
+      <main class="play-area">
+        <div class="board-section">
+          <div class="board-wrap" id="board-wrap">
+            <div class="board-clip" id="board-clip">
+              <canvas class="board-fill-canvas" id="board-fill-canvas" aria-hidden="true"></canvas>
+              <div class="board" id="board" aria-label="Game board"></div>
+              <div class="adventure-marker-layer" id="adventure-marker-layer" aria-hidden="true"></div>
+              <canvas class="fx-canvas" id="fx-canvas" aria-hidden="true"></canvas>
+              <div class="particle-layer" id="particle-layer" aria-hidden="true"></div>
+              <div class="floating-layer" id="floating-layer" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+
+        <section class="tray-section">
+          <div class="power-hub" id="power-hub" aria-label="Power tools">
+            <button id="power-hub-toggle" class="power-hub-toggle" type="button" aria-label="Open powers" aria-expanded="false">
+              <img src="./assets/ui/powers/bag_clean.webp?v=20260423pwr5" class="power-hub-toggle-icon" alt="" aria-hidden="true" draggable="false" />
+            </button>
+            <div id="power-icons-row" class="power-icons-row" aria-hidden="true">
+              <button id="power-twist-btn" class="power-icon-btn" type="button" aria-label="Twist" data-power-key="twist">
+                <img src="./assets/ui/powers/twist_clean.webp?v=20260423pwr5" class="power-icon power-icon--twist" alt="" aria-hidden="true" draggable="false" />
+                <span class="power-count" id="power-twist-count">3</span>
+              </button>
+              <button id="power-hammer-btn" class="power-icon-btn" type="button" aria-label="Hammer" data-power-key="hammer">
+                <img src="./assets/ui/powers/hammer_clean.webp?v=20260423pwr5" class="power-icon power-icon--hammer" alt="" aria-hidden="true" draggable="false" />
+                <span class="power-count" id="power-hammer-count">2</span>
+              </button>
+              <button id="power-tnt-btn" class="power-icon-btn" type="button" aria-label="TNT" data-power-key="tnt">
+                <img src="./assets/ui/powers/tnt_clean.webp?v=20260423pwr5" class="power-icon power-icon--tnt" alt="" aria-hidden="true" draggable="false" />
+                <span class="power-count" id="power-tnt-count">1</span>
+              </button>
+            </div>
+          </div>
+          <div class="piece-tray" id="piece-tray"></div>
+        </section>
+      </main>
+    </div>
+
+    <div class="overlay overlay--visible" id="menu-screen">
+      <div class="modal menu-modal">
+        <div class="menu-scene" role="img" aria-label="Grid Crown start screen">
+          <button id="menu-remove-ads-btn" class="menu-remove-ads-btn" type="button" aria-label="Remove Ads">
+            <span class="menu-remove-ads-icon" aria-hidden="true">
+              <span class="menu-remove-ads-word">ADS</span>
+              <span class="menu-remove-ads-slash"></span>
+            </span>
+          </button>
+          <button id="menu-shop-open-btn" class="menu-shop-open-btn" type="button" aria-label="Open shop">
+            <img
+              src="./assets/ui/shop/shop-open-icon-cart-new-only.webp?v=20260428shopicon2"
+              class="menu-shop-icon-img"
+              alt=""
+              aria-hidden="true"
+              draggable="false"
+            />
+            <span class="menu-shop-notify-dot" id="menu-shop-notify-dot" aria-hidden="true"></span>
+          </button>
+          <button id="menu-leaderboard-open-btn" class="menu-leaderboard-open-btn" type="button" aria-label="Open leaderboard">
+            <span class="menu-leaderboard-icon" aria-hidden="true">
+              <span class="menu-leaderboard-step menu-leaderboard-step--2">2</span>
+              <span class="menu-leaderboard-step menu-leaderboard-step--1">1</span>
+              <span class="menu-leaderboard-step menu-leaderboard-step--3">3</span>
+            </span>
+          </button>
+          <button id="menu-settings-btn" class="menu-settings-btn" type="button" aria-label="Settings" aria-pressed="false">
+            <span class="menu-settings-icon" aria-hidden="true">&#9881;</span>
+            <span class="menu-sr-only" id="menu-settings-subtitle">Sound on</span>
+          </button>
+          <button id="menu-badges-open-btn" class="menu-badges-open-btn" type="button" aria-label="Open badges">
+            <img src="./assets/ui/badges/menu-badges-icon-gold-cut.webp?v=20260420d" class="menu-badges-open-icon" alt="" aria-hidden="true" draggable="false" />
+          </button>
+
+          <section id="menu-badges-screen" class="menu-badges-screen" aria-label="Badges" aria-hidden="true">
+            <div class="menu-badges-screen__header">
+              <button id="menu-badges-close-btn" class="menu-badges-close-btn" type="button" aria-label="Back">&#8249;</button>
+              <h2 class="menu-badges-title">Badges</h2>
+              <p class="menu-badges-summary" id="menu-badges-summary">0/12 unlocked</p>
+            </div>
+            <div class="menu-badges-progress">
+              <div class="menu-badges-progress-track">
+                <span id="menu-badges-progress-fill" class="menu-badges-progress-fill"></span>
+              </div>
+            </div>
+            <div class="menu-badges-filters" id="menu-badges-filters" role="tablist" aria-label="Badge filters">
+              <button class="menu-badges-filter-btn is-active" id="menu-badges-filter-all" type="button" data-filter="all">All</button>
+              <button class="menu-badges-filter-btn" id="menu-badges-filter-unlocked" type="button" data-filter="unlocked">Unlocked</button>
+              <button class="menu-badges-filter-btn" id="menu-badges-filter-locked" type="button" data-filter="locked">Locked</button>
+            </div>
+            <div class="menu-badges-grid" id="menu-badges-grid" role="list"></div>
+
+            <div class="menu-badge-detail" id="menu-badge-detail" aria-hidden="true">
+              <button class="menu-badge-detail__backdrop" id="menu-badge-detail-backdrop" type="button" aria-label="Close details"></button>
+              <div class="menu-badge-detail__card" role="dialog" aria-modal="true" aria-label="Badge details">
+                <button class="menu-badge-detail__close" id="menu-badge-detail-close" type="button" aria-label="Close">X</button>
+                <img class="menu-badge-detail__img" id="menu-badge-detail-img" src="" alt="" />
+                <h4 class="menu-badge-detail__name" id="menu-badge-detail-name"></h4>
+                <p class="menu-badge-detail__condition" id="menu-badge-detail-condition"></p>
+                <p class="menu-badge-detail__status" id="menu-badge-detail-status"></p>
+              </div>
+            </div>
+          </section>
+
+          <section id="menu-leaderboard-screen" class="menu-leaderboard-screen" aria-label="Leaderboard" aria-hidden="true">
+            <div class="menu-leaderboard-screen__header">
+              <button id="menu-leaderboard-close-btn" class="menu-leaderboard-close-btn" type="button" aria-label="Back">&#8249;</button>
+              <h2 class="menu-leaderboard-title">Leaderboard</h2>
+            </div>
+
+            <div id="menu-leaderboard-content" class="menu-leaderboard-content">
+              <div class="menu-leaderboard-podium-wrap" aria-hidden="true">
+                <img
+                  id="menu-leaderboard-podium-img"
+                  class="menu-leaderboard-podium-img"
+                  src="./assets/ui/leaderboard/podium-avatars-combo-user-clean-crop.webp?v=20260422lb3"
+                  alt=""
+                  draggable="false"
+                />
+              </div>
+
+              <div class="menu-leaderboard-switch" aria-label="Leaderboard mode switch">
+                <button id="menu-leaderboard-prev-btn" class="menu-leaderboard-switch-btn" type="button" aria-label="Previous mode">&#8249;</button>
+                <p id="menu-leaderboard-mode-label" class="menu-leaderboard-mode-label">Global</p>
+                <button id="menu-leaderboard-next-btn" class="menu-leaderboard-switch-btn" type="button" aria-label="Next mode">&#8250;</button>
+              </div>
+
+              <ul id="menu-leaderboard-list" class="menu-leaderboard-list" role="list"></ul>
+
+              <div class="menu-leaderboard-you" id="menu-leaderboard-you">
+                <span class="menu-leaderboard-you-label">Your Rank</span>
+                <span class="menu-leaderboard-you-rank" id="menu-leaderboard-your-rank">#-</span>
+                <span class="menu-leaderboard-you-name" id="menu-leaderboard-your-name">Player</span>
+                <span class="menu-leaderboard-you-score" id="menu-leaderboard-your-score">0</span>
+              </div>
+            </div>
+
+            <section id="menu-leaderboard-setup" class="menu-leaderboard-setup" aria-label="Leaderboard profile setup" aria-hidden="true" hidden>
+              <button id="menu-leaderboard-setup-backdrop" class="menu-leaderboard-setup-backdrop" type="button" aria-label="Close"></button>
+              <div class="menu-leaderboard-setup-card" role="dialog" aria-modal="true" aria-label="Choose your identity">
+                <p class="menu-leaderboard-setup-title">Choose your identity</p>
+                <input
+                  id="menu-leaderboard-name-input"
+                  class="menu-leaderboard-name-input"
+                  type="text"
+                  maxlength="18"
+                  placeholder="Enter player name"
+                  aria-label="Player name"
+                />
+                <select id="menu-leaderboard-country-select" class="menu-leaderboard-country-select" aria-label="Country"></select>
+                <p class="menu-leaderboard-setup-note">You can not change this later.</p>
+                <button id="menu-leaderboard-save-btn" class="menu-leaderboard-save-btn" type="button">Continue</button>
+              </div>
+            </section>
+          </section>
+
+          <section id="menu-shop-screen" class="menu-shop-screen" aria-label="Shop" aria-hidden="true">
+            <div class="menu-shop-screen__header">
+              <button id="menu-shop-close-btn" class="menu-shop-close-btn" type="button" aria-label="Back">&#8249;</button>
+              <h2 class="menu-shop-title">Shop</h2>
+              <p class="menu-shop-subtitle">Boost your run with premium power packs</p>
+            </div>
+
+            <article class="menu-shop-daily-card menu-shop-daily-card--compact" aria-label="Daily reward">
+              <div class="menu-shop-daily-frame">
+                <div class="menu-shop-daily-top menu-shop-daily-top--meta">
+                  <p class="menu-shop-daily-kicker">Daily Reward</p>
+                  <span id="menu-shop-daily-status-pill" class="menu-shop-daily-status-pill">Locked</span>
+                </div>
+                <div class="menu-shop-daily-chips">
+                  <div class="menu-shop-reward-chip">
+                    <img src="./assets/ui/powers/twist_clean.webp?v=20260423pwr5" alt="" aria-hidden="true" draggable="false" />
+                    <span>Twist</span>
+                    <strong>+1</strong>
+                  </div>
+                  <div class="menu-shop-reward-chip">
+                    <img src="./assets/ui/powers/hammer_clean.webp?v=20260423pwr5" alt="" aria-hidden="true" draggable="false" />
+                    <span>Hammer</span>
+                    <strong>+1</strong>
+                  </div>
+                  <div class="menu-shop-reward-chip">
+                    <img src="./assets/ui/powers/tnt_clean.webp?v=20260423pwr5" alt="" aria-hidden="true" draggable="false" />
+                    <span>TNT</span>
+                    <strong>+1</strong>
+                  </div>
+                </div>
+                <p id="menu-shop-daily-locked-row" class="menu-shop-daily-locked-row" hidden><span>Available in: 23h 59m 58s</span></p>
+                <button id="menu-shop-daily-claim-btn" class="menu-shop-daily-claim-btn" type="button">Collect reward</button>
+              </div>
+            </article>
+
+            <section class="menu-shop-packs menu-shop-packs--carousel" aria-label="Power packs">
+              <div class="menu-shop-pack-carousel">
+                <button id="menu-shop-pack-prev-btn" class="menu-shop-pack-arrow" type="button" aria-label="Previous pack">&#8249;</button>
+                <div class="menu-shop-pack-stage">
+                  <img id="menu-shop-pack-image" class="menu-shop-pack-image" src="./assets/ui/shop/starter-pack-clean.webp?v=20260426shop1" alt="Starter Pack" draggable="false" />
+                </div>
+                <button id="menu-shop-pack-next-btn" class="menu-shop-pack-arrow" type="button" aria-label="Next pack">&#8250;</button>
+              </div>
+              <div class="menu-shop-pack-info">
+                <p id="menu-shop-pack-name" class="menu-shop-pack-name">Starter Pack</p>
+                <p id="menu-shop-pack-meta" class="menu-shop-pack-meta">Twist x6 • Hammer x4 • TNT x2</p>
+                <button id="menu-shop-pack-buy-btn" class="menu-shop-pack-buy-btn" type="button">$0.69</button>
+              </div>
+            </section>
+          </section>
+
+          <section class="menu-brand">
+            <div class="menu-logo-wrap">
+              <img src="./assets/logo.png" class="menu-logo-img" alt="Grid Crown" draggable="false" />
+            </div>
+          </section>
+          <section class="menu-cta">
+            <button id="start-classic-btn" class="menu-cta-btn menu-cta-btn--classic" type="button" aria-label="Play Classic">
+              <img src="./assets/ui/play-classic-btn.webp" class="menu-cta-img" alt="" aria-hidden="true" draggable="false" />
+            </button>
+            <button id="start-daily-btn" class="menu-cta-btn menu-cta-btn--journey" type="button" aria-label="Journey">
+              <img src="./assets/ui/journey-btn.webp" class="menu-cta-img" alt="" aria-hidden="true" draggable="false" />
+            </button>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div id="journey-screen-root"></div>
+
+    <div class="overlay" id="settings-overlay">
+      <div class="modal settings-modal">
+        <div class="settings-panel">
+          <button id="settings-close-btn" class="settings-close-btn" type="button" aria-label="Close settings">X</button>
+          <p class="modal-kicker settings-kicker">Settings</p>
+          <h2 class="settings-title">Game Control</h2>
+
+          <div class="settings-toggle-list">
+            <div class="settings-row">
+              <span class="settings-label">Sound</span>
+              <button id="settings-sound-toggle-btn" class="settings-toggle-btn" type="button" aria-pressed="true">On</button>
+            </div>
+          <div class="settings-row">
+            <span class="settings-label">Vibration</span>
+            <button id="settings-haptics-toggle-btn" class="settings-toggle-btn" type="button" aria-pressed="true">On</button>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">Visual Mode</span>
+            <button
+              id="settings-visual-mode-btn"
+              class="settings-toggle-btn settings-toggle-btn--mode"
+              type="button"
+              aria-label="Change visual mode"
+            >Royal Night</button>
+          </div>
+          <div class="settings-row">
+            <span class="settings-label">Relaxing Mode</span>
+            <button id="settings-relaxing-toggle-btn" class="settings-toggle-btn" type="button" aria-pressed="false">Off</button>
+          </div>
+            <div class="settings-row settings-row--sub">
+              <span class="settings-label-wrap">
+                <span class="settings-label">Relaxing Music</span>
+                <span class="settings-label-note">Optional standalone music</span>
+              </span>
+              <button id="settings-relaxing-music-toggle-btn" class="settings-toggle-btn" type="button" aria-pressed="false">Off</button>
+            </div>
+          </div>
+
+          <div class="settings-actions">
+            <button id="settings-resume-btn" class="primary-btn" type="button">Back To Game</button>
+            <button id="settings-remove-ads-btn" class="ghost-btn settings-remove-ads-btn" type="button">Remove Ads</button>
+            <button id="settings-badges-btn" class="ghost-btn" type="button">Badges</button>
+            <button id="settings-leaderboard-btn" class="ghost-btn" type="button">Leaderboard</button>
+            <button id="settings-restart-btn" class="ghost-btn" type="button">Restart Run</button>
+            <button id="settings-home-btn" class="ghost-btn settings-home-btn" type="button">Back To Home</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay overlay--gameover" id="gameover-modal">
+      <div class="gameover-screen">
+        <p class="gameover-heading">Game Over</p>
+
+        <section class="gameover-score-panel" aria-label="Run result">
+          <div class="gameover-stat-row gameover-stat-row--score">
+            <span class="gameover-stat-label">Score</span>
+            <span class="gameover-stat-value" id="final-score">0</span>
+          </div>
+          <div class="gameover-divider" aria-hidden="true"></div>
+          <div class="gameover-stat-row">
+            <span class="gameover-stat-label gameover-stat-label--best">Best</span>
+            <span class="gameover-stat-value gameover-stat-value--best" id="gameover-best-score">0</span>
+          </div>
+        </section>
+
+        <div class="gameover-actions">
+          <button id="restart-gameover-btn" class="gameover-btn gameover-btn--play" type="button">
+            <img src="./assets/ui/journey/btn-level-normal.webp" class="gameover-btn-bg gameover-btn-bg--normal" alt="" aria-hidden="true" />
+            <img src="./assets/ui/journey/btn-level-pressed.webp" class="gameover-btn-bg gameover-btn-bg--pressed" alt="" aria-hidden="true" />
+            <img src="./assets/ui/journey/btn-level-disabled.webp" class="gameover-btn-bg gameover-btn-bg--disabled" alt="" aria-hidden="true" />
+            <span class="gameover-btn-label">Play Again</span>
+          </button>
+          <button id="gameover-home-btn" class="gameover-btn gameover-btn--home" type="button">
+            <img src="./assets/ui/journey/btn-level-normal.webp" class="gameover-btn-bg gameover-btn-bg--normal" alt="" aria-hidden="true" />
+            <img src="./assets/ui/journey/btn-level-pressed.webp" class="gameover-btn-bg gameover-btn-bg--pressed" alt="" aria-hidden="true" />
+            <img src="./assets/ui/journey/btn-level-disabled.webp" class="gameover-btn-bg gameover-btn-bg--disabled" alt="" aria-hidden="true" />
+            <span class="gameover-btn-label">Home</span>
+          </button>
+          <button id="gameover-continue-btn" class="gameover-btn gameover-btn--continue" type="button" disabled aria-disabled="true">
+            <img src="./assets/ui/journey/btn-level-disabled.webp" class="gameover-btn-bg gameover-btn-bg--normal" alt="" aria-hidden="true" />
+            <img src="./assets/ui/journey/btn-level-disabled.webp" class="gameover-btn-bg gameover-btn-bg--pressed" alt="" aria-hidden="true" />
+            <img src="./assets/ui/journey/btn-level-disabled.webp" class="gameover-btn-bg gameover-btn-bg--disabled" alt="" aria-hidden="true" />
+            <span class="gameover-btn-label gameover-btn-label--rewarded">
+              <span class="gameover-continue-text">Watch Ad Continue</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="no-space-banner" id="no-space-banner" role="status" aria-live="polite">
+      No space left
+    </div>
+
+    <div class="overlay overlay--level-complete" id="adventure-complete-modal">
+      <div class="level-complete-card">
+        <div class="level-complete-content">
+          <img
+            src="./assets/ui/level-complete/level-complete-badge.webp"
+            class="level-complete-badge"
+            alt=""
+            aria-hidden="true"
+          />
+          <p class="level-complete-kicker">Level Complete</p>
+          <h2 id="adventure-complete-title" class="level-complete-title">Great!</h2>
+          <p class="level-complete-score">Score: <span id="adventure-complete-score">0</span></p>
+          <p id="adventure-complete-reach" class="level-complete-reach">
+            Only 74% of players made it this far
+          </p>
+          <button id="adventure-next-btn" class="level-complete-btn level-complete-btn--primary">Next Level</button>
+          <button id="adventure-replay-btn" class="level-complete-btn level-complete-btn--ghost">Replay Level</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay overlay--milestone-unlock" id="milestone-unlock-modal">
+      <div class="milestone-unlock-card">
+        <div class="milestone-unlock-content">
+          <p class="milestone-unlock-kicker">Milestone Reached</p>
+          <h2 class="milestone-unlock-title" id="milestone-unlock-title">Level 10 Complete</h2>
+          <p class="milestone-unlock-subtitle">New Color Block Unlocked</p>
+          <div class="milestone-unlock-preview" aria-hidden="true">
+            <img class="milestone-red-block" src="./assets/blocks/block-red.webp" alt="">
+            <img class="milestone-red-block" src="./assets/blocks/block-red.webp" alt="">
+            <img class="milestone-red-block" src="./assets/blocks/block-red.webp" alt="">
+          </div>
+          <p class="milestone-unlock-text" id="milestone-unlock-text">
+            Ruby Red blocks are now active in upcoming Journey levels.
+          </p>
+          <button id="milestone-unlock-continue-btn" class="milestone-unlock-btn" type="button">
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay overlay--badge-unlock" id="badge-unlock-modal">
+      <button class="badge-unlock-backdrop" id="badge-unlock-backdrop" type="button" aria-label="Close badge popup"></button>
+      <div class="badge-unlock-card" role="dialog" aria-modal="true" aria-label="Badge unlocked">
+        <p class="badge-unlock-kicker">Badge Unlocked</p>
+        <img class="badge-unlock-image" id="badge-unlock-image" src="" alt="" />
+        <h3 class="badge-unlock-name" id="badge-unlock-name">Badge</h3>
+        <p class="badge-unlock-reason-label">Reason</p>
+        <p class="badge-unlock-reason" id="badge-unlock-reason">Achievement completed</p>
+        <button class="badge-unlock-close-btn" id="badge-unlock-close-btn" type="button">Awesome</button>
+      </div>
+    </div>
+
+    <div class="overlay overlay--remove-ads" id="remove-ads-modal">
+      <button class="remove-ads-backdrop" id="remove-ads-backdrop" type="button" aria-label="Close remove ads popup"></button>
+      <div class="remove-ads-card" role="dialog" aria-modal="true" aria-label="Remove ads">
+        <p class="modal-kicker">Remove Ads</p>
+        <h2 id="remove-ads-title">Go Ad-Free</h2>
+        <p id="remove-ads-description">
+          Removes in-game banner/interstitial ads.
+          Rewarded ads stay optional for extra rewards.
+        </p>
+        <p class="remove-ads-price" id="remove-ads-price">$1.99 USD</p>
+        <div class="remove-ads-actions">
+          <button id="remove-ads-purchase-btn" class="primary-btn remove-ads-purchase-btn" type="button">Pay $1.99 USD</button>
+          <button id="remove-ads-cancel-btn" class="ghost-btn remove-ads-cancel-btn" type="button">Not Now</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ad-banner-slot" aria-label="Banner ad placeholder"></div>
+    <input id="settings-photo-picker" type="file" accept="image/*" hidden />
+
+    <script>
+      window.__LEADERBOARD_FIREBASE__ = window.__LEADERBOARD_FIREBASE__ || {
+        enabled: true,
+        apiKey: "AIzaSyDe_QKqTeGzua5XfMw6wlNm547lr22xOhM",
+        authDomain: "grid-crown-live.firebaseapp.com",
+        projectId: "grid-crown-live",
+        appId: "1:916758531971:web:3b66634a3892b1f5a270b6",
+        storageBucket: "grid-crown-live.firebasestorage.app",
+        messagingSenderId: "916758531971",
+        measurementId: "G-MM3HSX1BMY",
+      };
+    </script>
+    <script type="module" src="./src/main.js?v=20260511nosplash1"></script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

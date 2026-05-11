@@ -1,0 +1,10 @@
+{
+  "appId": "com.ozgur72.gridcrownblockblast",
+  "appName": "Grid Crown",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}
+

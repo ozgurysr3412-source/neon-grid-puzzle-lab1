@@ -1,0 +1,31 @@
+{
+  "name": "neon-grid-forge-prototype",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "node dev-server.cjs",
+    "build:web": "node scripts/build-web.mjs",
+    "assets:optimize:runtime": "node scripts/optimize-runtime-assets.mjs",
+    "assets:restore:runtime": "node scripts/restore-runtime-assets.mjs",
+    "android:add": "npx cap add android",
+    "android:sync": "npm run build:web && npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:apk:debug": "cd android && gradlew.bat assembleDebug",
+    "test:smoke": "node scripts/smoke-sim.mjs",
+    "analyze:cookiecats": "node scripts/analyze-cookie-cats.mjs",
+    "test:bestbadge": "node scripts/test-best-badge.mjs"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
+    "@capacitor/ios": "^7.6.4",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.34.5"
+  },
+  "dependencies": {
+    "@capacitor-community/admob": "^7.2.0",
+    "@capacitor/local-notifications": "^7.0.6"
+  }
+}

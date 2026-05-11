@@ -1,0 +1,546 @@
+{
+  "generatedAt": "2026-04-30T00:20:52.175Z",
+  "convertedAssets": [
+    {
+      "source": "./assets/ui/shop/starter-pack-clean.png",
+      "optimized": "./assets/ui/shop/starter-pack-clean.webp",
+      "sourceBytes": 4284701,
+      "optimizedBytes": 101714,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/shop/value-pack-clean.png",
+      "optimized": "./assets/ui/shop/value-pack-clean.webp",
+      "sourceBytes": 4205629,
+      "optimizedBytes": 103596,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/shop/best-value-pack-clean.png",
+      "optimized": "./assets/ui/shop/best-value-pack-clean.webp",
+      "sourceBytes": 4358902,
+      "optimizedBytes": 116314,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/shop/big-pack-clean.png",
+      "optimized": "./assets/ui/shop/big-pack-clean.webp",
+      "sourceBytes": 4514004,
+      "optimizedBytes": 119410,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/mascot/reactions/reaction-sad-soft.png",
+      "optimized": "./assets/ui/mascot/reactions/reaction-sad-soft.webp",
+      "sourceBytes": 1419597,
+      "optimizedBytes": 90222,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/mascot/reactions/reaction-ambitious.png",
+      "optimized": "./assets/ui/mascot/reactions/reaction-ambitious.webp",
+      "sourceBytes": 1437532,
+      "optimizedBytes": 87930,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/mascot/reactions/reaction-happy.png",
+      "optimized": "./assets/ui/mascot/reactions/reaction-happy.webp",
+      "sourceBytes": 1331063,
+      "optimizedBytes": 88416,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/mascot/reactions/reaction-sad-deep.png",
+      "optimized": "./assets/ui/mascot/reactions/reaction-sad-deep.webp",
+      "sourceBytes": 1442569,
+      "optimizedBytes": 88456,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/journey/chest-glow-rays.png",
+      "optimized": "./assets/ui/journey/chest-glow-rays.webp",
+      "sourceBytes": 96960,
+      "optimizedBytes": 50970,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/journey/chest-gold.png",
+      "optimized": "./assets/ui/journey/chest-gold.webp",
+      "sourceBytes": 1240861,
+      "optimizedBytes": 181516,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/journey/trophy-silhouette-bg.png",
+      "optimized": "./assets/ui/journey/trophy-silhouette-bg.webp",
+      "sourceBytes": 94719,
+      "optimizedBytes": 43676,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/cloud-font/combo-cloud-white.png",
+      "optimized": "./assets/ui/cloud-font/combo-cloud-white.webp",
+      "sourceBytes": 589406,
+      "optimizedBytes": 120336,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/cloud-font/combo-cloud-color.png",
+      "optimized": "./assets/ui/cloud-font/combo-cloud-color.webp",
+      "sourceBytes": 556581,
+      "optimizedBytes": 99040,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/cloud-font/clear-cloud-white.png",
+      "optimized": "./assets/ui/cloud-font/clear-cloud-white.webp",
+      "sourceBytes": 538886,
+      "optimizedBytes": 120484,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/cloud-font/clear-cloud-color.png",
+      "optimized": "./assets/ui/cloud-font/clear-cloud-color.webp",
+      "sourceBytes": 516758,
+      "optimizedBytes": 95176,
+      "converted": true
+    },
+    {
+      "source": "./assets/adventure/locked/objective-blue.png",
+      "optimized": "./assets/adventure/locked/objective-blue.webp",
+      "sourceBytes": 215718,
+      "optimizedBytes": 25248,
+      "converted": true
+    },
+    {
+      "source": "./assets/adventure/locked/objective-yellow.png",
+      "optimized": "./assets/adventure/locked/objective-yellow.webp",
+      "sourceBytes": 270328,
+      "optimizedBytes": 28580,
+      "converted": true
+    },
+    {
+      "source": "./assets/adventure/locked/objective-red.png",
+      "optimized": "./assets/adventure/locked/objective-red.webp",
+      "sourceBytes": 255680,
+      "optimizedBytes": 24160,
+      "converted": true
+    },
+    {
+      "source": "./assets/adventure/processed/objective-base.png",
+      "optimized": "./assets/adventure/processed/objective-base.webp",
+      "sourceBytes": 178514,
+      "optimizedBytes": 8516,
+      "converted": true
+    },
+    {
+      "source": "./assets/adventure/cores/core-blue-diamond-clean-512.png",
+      "optimized": "./assets/adventure/cores/core-blue-diamond-clean-512.webp",
+      "sourceBytes": 183198,
+      "optimizedBytes": 23192,
+      "converted": true
+    },
+    {
+      "source": "./assets/adventure/cores/core-yellow-star-premium-512.png",
+      "optimized": "./assets/adventure/cores/core-yellow-star-premium-512.webp",
+      "sourceBytes": 395479,
+      "optimizedBytes": 32158,
+      "converted": true
+    },
+    {
+      "source": "./assets/adventure/cores/core-red-ruby-clean-512.png",
+      "optimized": "./assets/adventure/cores/core-red-ruby-clean-512.webp",
+      "sourceBytes": 243993,
+      "optimizedBytes": 22800,
+      "converted": true
+    },
+    {
+      "source": "./assets/blocks/block-pink.png",
+      "optimized": "./assets/blocks/block-pink.webp",
+      "sourceBytes": 3555099,
+      "optimizedBytes": 29726,
+      "converted": true
+    },
+    {
+      "source": "./assets/blocks/block-orange.png",
+      "optimized": "./assets/blocks/block-orange.webp",
+      "sourceBytes": 3782298,
+      "optimizedBytes": 31372,
+      "converted": true
+    },
+    {
+      "source": "./assets/blocks/block-green.png",
+      "optimized": "./assets/blocks/block-green.webp",
+      "sourceBytes": 3646482,
+      "optimizedBytes": 29906,
+      "converted": true
+    },
+    {
+      "source": "./assets/blocks/block-blue.png",
+      "optimized": "./assets/blocks/block-blue.webp",
+      "sourceBytes": 3370797,
+      "optimizedBytes": 32396,
+      "converted": true
+    },
+    {
+      "source": "./assets/blocks/block-purple.png",
+      "optimized": "./assets/blocks/block-purple.webp",
+      "sourceBytes": 3843630,
+      "optimizedBytes": 30484,
+      "converted": true
+    },
+    {
+      "source": "./assets/blocks/block-red.png",
+      "optimized": "./assets/blocks/block-red.webp",
+      "sourceBytes": 2346894,
+      "optimizedBytes": 24896,
+      "converted": true
+    },
+    {
+      "source": "./assets/icons/approval-white.png",
+      "optimized": "./assets/icons/approval-white.webp",
+      "sourceBytes": 6947687,
+      "optimizedBytes": 20144,
+      "converted": true
+    },
+    {
+      "source": "./assets/icons/approval-gold.png",
+      "optimized": "./assets/icons/approval-gold.webp",
+      "sourceBytes": 5846737,
+      "optimizedBytes": 18094,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/powers/bag_clean.png",
+      "optimized": "./assets/ui/powers/bag_clean.webp",
+      "sourceBytes": 1431662,
+      "optimizedBytes": 63056,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/powers/twist_clean.png",
+      "optimized": "./assets/ui/powers/twist_clean.webp",
+      "sourceBytes": 5304835,
+      "optimizedBytes": 167658,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/powers/hammer_clean.png",
+      "optimized": "./assets/ui/powers/hammer_clean.webp",
+      "sourceBytes": 789989,
+      "optimizedBytes": 74070,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/powers/tnt_clean.png",
+      "optimized": "./assets/ui/powers/tnt_clean.webp",
+      "sourceBytes": 1428142,
+      "optimizedBytes": 47208,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/shop/shop-open-icon-cart-new-only.png",
+      "optimized": "./assets/ui/shop/shop-open-icon-cart-new-only.webp",
+      "sourceBytes": 577695,
+      "optimizedBytes": 18222,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/badges/menu-badges-icon-gold-cut.png",
+      "optimized": "./assets/ui/badges/menu-badges-icon-gold-cut.webp",
+      "sourceBytes": 4283296,
+      "optimizedBytes": 63440,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/leaderboard/podium-avatars-combo-user-clean-crop.png",
+      "optimized": "./assets/ui/leaderboard/podium-avatars-combo-user-clean-crop.webp",
+      "sourceBytes": 2438018,
+      "optimizedBytes": 85744,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/play-classic-btn.png",
+      "optimized": "./assets/ui/play-classic-btn.webp",
+      "sourceBytes": 1387709,
+      "optimizedBytes": 25692,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/journey-btn.png",
+      "optimized": "./assets/ui/journey-btn.webp",
+      "sourceBytes": 1381741,
+      "optimizedBytes": 26480,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/journey/btn-level-normal.png",
+      "optimized": "./assets/ui/journey/btn-level-normal.webp",
+      "sourceBytes": 73585,
+      "optimizedBytes": 5882,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/journey/btn-level-pressed.png",
+      "optimized": "./assets/ui/journey/btn-level-pressed.webp",
+      "sourceBytes": 70049,
+      "optimizedBytes": 6450,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/journey/btn-level-disabled.png",
+      "optimized": "./assets/ui/journey/btn-level-disabled.webp",
+      "sourceBytes": 67971,
+      "optimizedBytes": 3654,
+      "converted": true
+    },
+    {
+      "source": "./assets/ui/level-complete/level-complete-badge.png",
+      "optimized": "./assets/ui/level-complete/level-complete-badge.webp",
+      "sourceBytes": 4034211,
+      "optimizedBytes": 192910,
+      "converted": true
+    }
+  ],
+  "modifiedFiles": [
+    "src/main.js",
+    "src/ui/journey/journeyScreenPartial.js",
+    "src/ui/uiManager.js",
+    "index.html"
+  ],
+  "replacements": [
+    {
+      "file": "src/main.js",
+      "from": "./assets/ui/shop/starter-pack-clean.png?v=20260426shop1",
+      "to": "./assets/ui/shop/starter-pack-clean.webp?v=20260426shop1"
+    },
+    {
+      "file": "src/main.js",
+      "from": "./assets/ui/shop/value-pack-clean.png?v=20260426shop1",
+      "to": "./assets/ui/shop/value-pack-clean.webp?v=20260426shop1"
+    },
+    {
+      "file": "src/main.js",
+      "from": "./assets/ui/shop/best-value-pack-clean.png?v=20260426shop1",
+      "to": "./assets/ui/shop/best-value-pack-clean.webp?v=20260426shop1"
+    },
+    {
+      "file": "src/main.js",
+      "from": "./assets/ui/shop/big-pack-clean.png?v=20260426shop1",
+      "to": "./assets/ui/shop/big-pack-clean.webp?v=20260426shop1"
+    },
+    {
+      "file": "src/main.js",
+      "from": "./assets/ui/mascot/reactions/reaction-sad-soft.png?v=20260420a",
+      "to": "./assets/ui/mascot/reactions/reaction-sad-soft.webp?v=20260420a"
+    },
+    {
+      "file": "src/main.js",
+      "from": "./assets/ui/mascot/reactions/reaction-ambitious.png?v=20260420a",
+      "to": "./assets/ui/mascot/reactions/reaction-ambitious.webp?v=20260420a"
+    },
+    {
+      "file": "src/main.js",
+      "from": "./assets/ui/mascot/reactions/reaction-happy.png?v=20260420a",
+      "to": "./assets/ui/mascot/reactions/reaction-happy.webp?v=20260420a"
+    },
+    {
+      "file": "src/main.js",
+      "from": "./assets/ui/mascot/reactions/reaction-sad-deep.png?v=20260420a",
+      "to": "./assets/ui/mascot/reactions/reaction-sad-deep.webp?v=20260420a"
+    },
+    {
+      "file": "src/ui/journey/journeyScreenPartial.js",
+      "from": "./assets/ui/journey/chest-glow-rays.png",
+      "to": "./assets/ui/journey/chest-glow-rays.webp"
+    },
+    {
+      "file": "src/ui/journey/journeyScreenPartial.js",
+      "from": "./assets/ui/journey/chest-gold.png",
+      "to": "./assets/ui/journey/chest-gold.webp"
+    },
+    {
+      "file": "src/ui/journey/journeyScreenPartial.js",
+      "from": "./assets/ui/journey/trophy-silhouette-bg.png",
+      "to": "./assets/ui/journey/trophy-silhouette-bg.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/ui/cloud-font/combo-cloud-white.png?v=20260429cloud1",
+      "to": "./assets/ui/cloud-font/combo-cloud-white.webp?v=20260429cloud1"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/ui/cloud-font/combo-cloud-color.png?v=20260429cloud1",
+      "to": "./assets/ui/cloud-font/combo-cloud-color.webp?v=20260429cloud1"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/ui/cloud-font/clear-cloud-white.png?v=20260429cloud1",
+      "to": "./assets/ui/cloud-font/clear-cloud-white.webp?v=20260429cloud1"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/ui/cloud-font/clear-cloud-color.png?v=20260429cloud1",
+      "to": "./assets/ui/cloud-font/clear-cloud-color.webp?v=20260429cloud1"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/adventure/locked/objective-blue.png",
+      "to": "./assets/adventure/locked/objective-blue.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/adventure/locked/objective-yellow.png",
+      "to": "./assets/adventure/locked/objective-yellow.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/adventure/locked/objective-red.png",
+      "to": "./assets/adventure/locked/objective-red.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/adventure/processed/objective-base.png",
+      "to": "./assets/adventure/processed/objective-base.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/adventure/cores/core-blue-diamond-clean-512.png",
+      "to": "./assets/adventure/cores/core-blue-diamond-clean-512.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/adventure/cores/core-yellow-star-premium-512.png",
+      "to": "./assets/adventure/cores/core-yellow-star-premium-512.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/adventure/cores/core-red-ruby-clean-512.png",
+      "to": "./assets/adventure/cores/core-red-ruby-clean-512.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/blocks/block-pink.png",
+      "to": "./assets/blocks/block-pink.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/blocks/block-orange.png",
+      "to": "./assets/blocks/block-orange.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/blocks/block-green.png",
+      "to": "./assets/blocks/block-green.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/blocks/block-blue.png",
+      "to": "./assets/blocks/block-blue.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/blocks/block-purple.png",
+      "to": "./assets/blocks/block-purple.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/blocks/block-red.png",
+      "to": "./assets/blocks/block-red.webp"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/icons/approval-white.png?v=bgfix1",
+      "to": "./assets/icons/approval-white.webp?v=bgfix1"
+    },
+    {
+      "file": "src/ui/uiManager.js",
+      "from": "./assets/icons/approval-gold.png?v=bgfix1",
+      "to": "./assets/icons/approval-gold.webp?v=bgfix1"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/powers/bag_clean.png?v=20260423pwr5",
+      "to": "./assets/ui/powers/bag_clean.webp?v=20260423pwr5"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/powers/twist_clean.png?v=20260423pwr5",
+      "to": "./assets/ui/powers/twist_clean.webp?v=20260423pwr5"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/powers/hammer_clean.png?v=20260423pwr5",
+      "to": "./assets/ui/powers/hammer_clean.webp?v=20260423pwr5"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/powers/tnt_clean.png?v=20260423pwr5",
+      "to": "./assets/ui/powers/tnt_clean.webp?v=20260423pwr5"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/shop/shop-open-icon-cart-new-only.png?v=20260428shopicon2",
+      "to": "./assets/ui/shop/shop-open-icon-cart-new-only.webp?v=20260428shopicon2"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/badges/menu-badges-icon-gold-cut.png?v=20260420d",
+      "to": "./assets/ui/badges/menu-badges-icon-gold-cut.webp?v=20260420d"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/leaderboard/podium-avatars-combo-user-clean-crop.png?v=20260422lb3",
+      "to": "./assets/ui/leaderboard/podium-avatars-combo-user-clean-crop.webp?v=20260422lb3"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/shop/starter-pack-clean.png?v=20260426shop1",
+      "to": "./assets/ui/shop/starter-pack-clean.webp?v=20260426shop1"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/play-classic-btn.png",
+      "to": "./assets/ui/play-classic-btn.webp"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/journey-btn.png",
+      "to": "./assets/ui/journey-btn.webp"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/journey/btn-level-normal.png",
+      "to": "./assets/ui/journey/btn-level-normal.webp"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/journey/btn-level-pressed.png",
+      "to": "./assets/ui/journey/btn-level-pressed.webp"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/journey/btn-level-disabled.png",
+      "to": "./assets/ui/journey/btn-level-disabled.webp"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/ui/level-complete/level-complete-badge.png",
+      "to": "./assets/ui/level-complete/level-complete-badge.webp"
+    },
+    {
+      "file": "index.html",
+      "from": "./assets/blocks/block-red.png",
+      "to": "./assets/blocks/block-red.webp"
+    }
+  ],
+  "summary": {
+    "convertedCount": 43,
+    "totalSourceBytes": 84979605,
+    "totalOptimizedBytes": 2669394,
+    "savedBytes": 82310211,
+    "savedPct": 96.85878276322889
+  }
+}
