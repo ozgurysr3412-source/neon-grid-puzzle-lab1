@@ -441,7 +441,7 @@ const SHOP_BILLING_PRODUCT_IDS = Object.freeze({
   big: "big_pack",
 });
 const REWARDED_CONTINUE_DAILY_LIMIT = 5;
-const ADMOB_USE_TEST_ADS = false;
+const ADMOB_USE_TEST_ADS = true;
 const ADMOB_ANDROID_APP_ID = ADMOB_USE_TEST_ADS
   ? "ca-app-pub-3940256099942544~3347511713"
   : "ca-app-pub-4788652923724034~1331997225";

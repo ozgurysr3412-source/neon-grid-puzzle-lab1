@@ -15,7 +15,7 @@ workflows:
         BUNDLE_ID: "com.ozgur72.gridcrownblockblast"
         XCODE_WORKSPACE: "App.xcworkspace"
         XCODE_SCHEME: "App"
-        ADMOB_IOS_APP_ID: "ca-app-pub-4788652923724034~5337780715"
+        ADMOB_IOS_APP_ID: "ca-app-pub-3940256099942544~1458002511"
 
     scripts:
       - name: Install npm dependencies
