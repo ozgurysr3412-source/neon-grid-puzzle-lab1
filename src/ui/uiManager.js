@@ -1884,8 +1884,7 @@ export class UIManager {
   }
 
   resolveBoardRenderMode() {
-    const ua = navigator.userAgent || "";
-    return /iphone|ipad|ipod/i.test(ua) ? "canvas" : "dom";
+    return "dom";
   }
 
   getBoardToneAtlasKind() {

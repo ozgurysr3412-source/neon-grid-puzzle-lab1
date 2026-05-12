@@ -71,8 +71,8 @@ function getBoardSizeLockKey() {
 }
 
 function getRequestedBoardRenderMode() {
-  // iOS WebView is smoother with canvas board rendering under long play sessions.
-  return isIosDevice() ? "canvas" : "dom";
+  // Keep board geometry in the approved stable mode across platforms.
+  return "dom";
 }
 
 function snapBoardWrapEdgePx(rawWrapWidth, boardWrap, boardSize = 8) {
