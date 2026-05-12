@@ -125,12 +125,20 @@ export class SoundManager {
   }
 
   async unlock() {
-    await this.ensureContext();
+    // Keep the resume call in the same gesture call-stack on iOS Safari/WKWebView.
+    void this.ensureContext();
+    let resumePromise = null;
     if (this.ctx?.state === "suspended") {
-      await this.ctx.resume();
+      resumePromise = this.ctx.resume();
+      if (resumePromise?.catch) {
+        resumePromise.catch(() => {});
+      }
     }
     this.primeHtmlAudio();
     this.syncAmbientPlayback();
+    if (resumePromise?.then) {
+      await resumePromise;
+    }
   }
 
   setRelaxingMode(enabled) {

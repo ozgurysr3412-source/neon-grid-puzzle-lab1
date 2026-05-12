@@ -2516,6 +2516,7 @@ let gameplayBannerVisible = false;
 let pendingMilestoneUnlock = null;
 let achievementUnlockTracker = null;
 let mascotReaction = null;
+let audioPreloadRequested = false;
 const settingsPhotoPickerInput = document.getElementById("settings-photo-picker");
 let classicPhotoBoardImageDataUrl = loadPhotoBoardImageDataUrl();
 let classicPhotoBoardTiles = [];
@@ -3646,7 +3647,10 @@ async function primeAudioForInteraction() {
   } catch {
     // Ignore unlock failures in restrictive webviews.
   }
-  void audio.preloadAll();
+  if (!audioPreloadRequested) {
+    audioPreloadRequested = true;
+    void audio.preloadAll();
+  }
 }
 
 ui.setBadgeUnlockPopupShownHandler(() => {
@@ -4564,8 +4568,27 @@ state.on("gameOver", (payload) => {
 });
 
 dragDrop.init();
-ui.render(state.getSnapshot());
-layoutGuardStatus = state.getSnapshot().status;
-scheduleLayoutGuards();
-mascotReaction = createMascotReactionOverlay();
+const INITIAL_RENDER_PRELOAD_BUDGET_MS = 260;
+let initialRenderDone = false;
+const performInitialRender = () => {
+  if (initialRenderDone) {
+    return;
+  }
+  initialRenderDone = true;
+  const snapshot = state.getSnapshot();
+  ui.render(snapshot);
+  layoutGuardStatus = snapshot.status;
+  scheduleLayoutGuards();
+  mascotReaction = createMascotReactionOverlay();
+};
+const preloadPromise = ui.preloadCoreGameplaySprites?.();
+if (preloadPromise?.then) {
+  const timeoutId = window.setTimeout(performInitialRender, INITIAL_RENDER_PRELOAD_BUDGET_MS);
+  preloadPromise.finally(() => {
+    window.clearTimeout(timeoutId);
+    performInitialRender();
+  });
+} else {
+  performInitialRender();
+}
 

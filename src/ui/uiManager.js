@@ -738,6 +738,7 @@ export class UIManager {
     this.boardToneCanvasMetrics = { width: 0, height: 0, gap: 4, cellSize: 0 };
     this.coreSpritePreloadCache = new Map();
     this.coreGameplaySpritePreloadPromise = null;
+    this.pieceTrayRenderCache = [];
     this.lastRenderedBoardSnapshot = Array.from({ length: this.boardSize }, () => Array(this.boardSize).fill(0));
     this.badgeUnlockPanel = {
       visible: false,
@@ -2552,28 +2553,60 @@ export class UIManager {
   }
 
   renderPieces(pieces) {
-    this.elements.pieceTray.innerHTML = "";
+    const tray = this.elements.pieceTray;
+    const safePieces = Array.isArray(pieces) ? pieces : [];
+    const slotCount = Math.max(3, safePieces.length);
     const trayCellSize = this.resolveTrayCellSize();
-    pieces.forEach((piece, slotIndex) => {
-      const card = document.createElement("div");
+    for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
+      const piece = safePieces[slotIndex] ?? null;
+      let card = tray.children[slotIndex];
+      if (!(card instanceof HTMLElement)) {
+        card = document.createElement("div");
+        tray.appendChild(card);
+      }
       card.className = "piece-card";
       card.dataset.slot = String(slotIndex);
       const hiddenByDrag =
         this.dragSessionActive &&
         this.dragSessionSlot !== null &&
         slotIndex === this.dragSessionSlot;
+      const renderKey = this.buildPieceSlotRenderKey(piece, hiddenByDrag, trayCellSize);
+      if (this.pieceTrayRenderCache[slotIndex] === renderKey) {
+        continue;
+      }
+      this.pieceTrayRenderCache[slotIndex] = renderKey;
 
       if (!piece || hiddenByDrag) {
         card.classList.add("piece-card--empty");
-        this.elements.pieceTray.appendChild(card);
-        return;
+        card.textContent = "";
+        continue;
       }
 
+      card.classList.remove("piece-card--empty");
       card.dataset.pieceInstance = String(piece.instanceId);
       const grid = this.createPieceGrid(piece, trayCellSize);
+      card.textContent = "";
       card.appendChild(grid);
-      this.elements.pieceTray.appendChild(card);
-    });
+    }
+    while (tray.children.length > slotCount) {
+      tray.lastElementChild?.remove();
+    }
+    if (this.pieceTrayRenderCache.length > slotCount) {
+      this.pieceTrayRenderCache.length = slotCount;
+    }
+  }
+
+  buildPieceSlotRenderKey(piece, hiddenByDrag, trayCellSize) {
+    if (!piece || hiddenByDrag) {
+      return `empty:${trayCellSize}`;
+    }
+    return [
+      "piece",
+      String(piece.instanceId ?? ""),
+      String(piece.tone ?? ""),
+      `${piece.width}x${piece.height}`,
+      String(trayCellSize),
+    ].join(":");
   }
 
   resolveTrayCellSize() {

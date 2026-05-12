@@ -2016,6 +2016,11 @@ html:not(.perf-lite) .cell[data-tone="6"], html:not(.perf-lite) .piece-cell[data
   filter: drop-shadow(0 0 10px rgba(156, 109, 255, 0.4));
 }
 
+.perf-ios-device .piece-card.piece-card--active,
+.perf-throttle .piece-card.piece-card--active {
+  filter: none;
+}
+
 .piece-card.piece-card--dragging {
   opacity: 0 !important;
   visibility: hidden !important;
@@ -2107,6 +2112,10 @@ html:not(.perf-lite) .cell[data-tone="6"], html:not(.perf-lite) .piece-cell[data
   pointer-events: none;
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.5));
   will-change: transform;
+}
+
+.perf-ios-device .drag-piece {
+  filter: none;
 }
 
 .drag-piece.drag-piece--power {
