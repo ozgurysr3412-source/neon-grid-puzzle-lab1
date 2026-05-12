@@ -1884,8 +1884,8 @@ export class UIManager {
   }
 
   resolveBoardRenderMode() {
-    // Release lock: board render mode is fixed.
-    return "dom";
+    const ua = navigator.userAgent || "";
+    return /iphone|ipad|ipod/i.test(ua) ? "canvas" : "dom";
   }
 
   getBoardToneAtlasKind() {

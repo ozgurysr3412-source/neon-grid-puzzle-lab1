@@ -71,8 +71,8 @@ function getBoardSizeLockKey() {
 }
 
 function getRequestedBoardRenderMode() {
-  // Release lock: board render mode is fixed.
-  return "dom";
+  // iOS WebView is smoother with canvas board rendering under long play sessions.
+  return isIosDevice() ? "canvas" : "dom";
 }
 
 function snapBoardWrapEdgePx(rawWrapWidth, boardWrap, boardSize = 8) {
@@ -402,6 +402,50 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", () => syncViewportMetrics(true, "vv-resize"));
   window.visualViewport.addEventListener("scroll", scheduleViewportSyncFromScroll);
 }
+
+function shouldIgnoreCalloutSuppression(target) {
+  const element = target instanceof HTMLElement
+    ? target
+    : target instanceof Node
+      ? target.parentElement
+      : null;
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(
+    element.closest('input, textarea, [contenteditable="true"], [data-allow-select="true"]'),
+  );
+}
+
+document.addEventListener("contextmenu", (event) => {
+  const target = event.target;
+  if (!(target instanceof Node)) {
+    return;
+  }
+  const gameShell = document.getElementById("game-shell");
+  if (!(gameShell instanceof HTMLElement) || !gameShell.contains(target)) {
+    return;
+  }
+  if (shouldIgnoreCalloutSuppression(target)) {
+    return;
+  }
+  event.preventDefault();
+}, { capture: true });
+
+document.addEventListener("selectstart", (event) => {
+  const target = event.target;
+  if (!(target instanceof Node)) {
+    return;
+  }
+  const gameShell = document.getElementById("game-shell");
+  if (!(gameShell instanceof HTMLElement) || !gameShell.contains(target)) {
+    return;
+  }
+  if (shouldIgnoreCalloutSuppression(target)) {
+    return;
+  }
+  event.preventDefault();
+}, { capture: true });
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
