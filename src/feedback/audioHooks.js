@@ -50,13 +50,18 @@ const DOMINANT_DUCK_TABLE = [
 
 const OVERLAP_MIN_INTERVAL_MS = {
   place: 30,
-  pickup: 24,
+  pickup: 14,
   hammerHit: 80,
   tntExplosion: 120,
   clear: 95,
   comboGoodJob: 240,
   comboPerfect: 260,
   comboIncredible: 280,
+};
+
+const CRITICAL_KEYS = new Set(["gameover", "levelComplete", "milestoneUnlock"]);
+const FALLBACK_URL_OVERRIDE = {
+  gameover: "./assets/sounds/gameover.mp3?v=1",
 };
 
 export class SoundManager {
@@ -96,6 +101,7 @@ export class SoundManager {
       qualifiedComboCount: 0,
     };
     this.comboVoiceQueueUntilMs = 0;
+    this.prewarmRequested = false;
   }
 
   resetComboVoiceFlow() {
@@ -159,6 +165,38 @@ export class SoundManager {
     return this.preloadPromise;
   }
 
+  async preloadKeys(keys = []) {
+    await this.ensureContext();
+    const safeKeys = Array.isArray(keys) ? keys : [];
+    for (const key of safeKeys) {
+      const sound = SOUND_LIBRARY[key];
+      if (!sound?.url) {
+        continue;
+      }
+      await this.loadBuffer(key, sound.url);
+    }
+  }
+
+  prewarmForGameplay() {
+    const startupKeys = [
+      "pickup",
+      "place",
+      "clear",
+      "comboGoodJob",
+      "comboPerfect",
+      "comboIncredible",
+      "gameover",
+      "levelComplete",
+      "milestoneUnlock",
+    ];
+    this.primeHtmlAudio(startupKeys);
+    if (this.prewarmRequested) {
+      return;
+    }
+    this.prewarmRequested = true;
+    void this.preloadKeys(startupKeys).catch(() => {});
+  }
+
   async ensureContext() {
     if (this.ctx) {
       return;
@@ -208,14 +246,21 @@ export class SoundManager {
     }
   }
 
-  primeHtmlAudio() {
+  primeHtmlAudio(keys = null) {
+    const keySet = Array.isArray(keys) && keys.length > 0
+      ? new Set(keys.map((key) => String(key)))
+      : null;
     Object.entries(SOUND_LIBRARY).forEach(([key, sound]) => {
+      if (keySet && !keySet.has(key)) {
+        return;
+      }
       if (!this.fallbackAudioPool.has(key)) {
-        const fallbackPoolSize = key === "pickup" ? 4 : 3;
+        const fallbackPoolSize = key === "pickup" ? 5 : 3;
         const fallbackPool = [];
         for (let i = 0; i < fallbackPoolSize; i += 1) {
           try {
-            const pooled = new Audio(sound.url);
+            const pooledUrl = FALLBACK_URL_OVERRIDE[key] || sound.url;
+            const pooled = new Audio(pooledUrl);
             pooled.preload = "auto";
             pooled.playsInline = true;
             pooled.load();
@@ -753,10 +798,21 @@ export class SoundManager {
       return;
     }
 
-    const buffer = this.buffers.get(key);
+    let buffer = this.buffers.get(key);
     if (this.ctx?.state === "suspended") {
       void this.ctx.resume().catch(() => {});
     }
+    if (CRITICAL_KEYS.has(key) && !buffer && !options.__criticalRetry) {
+      void this.loadBuffer(key, sound.url);
+      window.setTimeout(() => {
+        this.play(key, {
+          ...options,
+          __criticalRetry: true,
+        });
+      }, 70);
+      return;
+    }
+    buffer = this.buffers.get(key);
     if (!this.ctx || !this.master || this.ctx.state !== "running" || !buffer) {
       this.playFallback(key, options.volumeScale ?? 1, 0, playbackRate);
       return;
@@ -764,8 +820,16 @@ export class SoundManager {
 
     try {
       if (this.activeBufferSources.size >= this.maxConcurrentBufferSources) {
-        // Keep iOS thermals in check during bursty gameplay.
-        return;
+        const incomingPriority = this.getSfxPriority(key);
+        if (incomingPriority >= 400) {
+          this.stopActiveSoundsBelowPriority(incomingPriority, key);
+        } else if (key === "pickup" || key === "place") {
+          this.playFallback(key, options.volumeScale ?? 1, 0, playbackRate);
+          return;
+        } else {
+          // Keep iOS thermals in check during bursty gameplay.
+          return;
+        }
       }
       const source = this.ctx.createBufferSource();
       source.buffer = buffer;
@@ -829,11 +893,24 @@ export class SoundManager {
     if (!sound) {
       return;
     }
+    const clampedPlaybackRate = Math.max(0.6, Math.min(1.6, Number(playbackRate ?? 1)));
+    const safeSetPlaybackRate = (audio) => {
+      try {
+        audio.playbackRate = clampedPlaybackRate;
+      } catch {
+        // iOS can throw when setting playbackRate on HTMLMediaElement.
+      }
+    };
     const delayMs = Math.max(0, Math.round(when * 1000));
     const runPlayback = () => {
       try {
         if (this.activeHtmlAudios.size >= this.maxConcurrentHtmlAudios) {
-          return;
+          const incomingPriority = this.getSfxPriority(key);
+          if (incomingPriority >= 400 || key === "pickup") {
+            this.stopActiveSoundsBelowPriority(incomingPriority, key);
+          } else {
+            return;
+          }
         }
         if (key === "pickup") {
           const pickupPool = this.quickHtmlAudioPool.get("pickup");
@@ -845,7 +922,7 @@ export class SoundManager {
               audioFromPool.__sfxKey = key;
               audioFromPool.__sfxPriority = this.getSfxPriority(key);
               audioFromPool.volume = Math.max(0, Math.min(1, sound.volume * volumeScale));
-              audioFromPool.playbackRate = Math.max(0.6, Math.min(1.6, playbackRate));
+              safeSetPlaybackRate(audioFromPool);
               try {
                 audioFromPool.currentTime = 0;
               } catch {
@@ -869,7 +946,7 @@ export class SoundManager {
             pooled.__sfxKey = key;
             pooled.__sfxPriority = this.getSfxPriority(key);
             pooled.volume = Math.max(0, Math.min(1, sound.volume * volumeScale));
-            pooled.playbackRate = Math.max(0.6, Math.min(1.6, playbackRate));
+            safeSetPlaybackRate(pooled);
             this.activeHtmlAudios.add(pooled);
             if (!pooled.__sfxEndedListenerBound) {
               pooled.addEventListener("ended", () => {
@@ -882,7 +959,8 @@ export class SoundManager {
           }
         }
 
-        const audio = this.acquireFallbackAudio(key, sound.url);
+        const fallbackUrl = FALLBACK_URL_OVERRIDE[key] || sound.url;
+        const audio = this.acquireFallbackAudio(key, fallbackUrl);
         if (!audio) {
           return;
         }
@@ -890,7 +968,7 @@ export class SoundManager {
         audio.__sfxPriority = this.getSfxPriority(key);
         audio.__isPooled = true;
         audio.volume = Math.max(0, Math.min(1, sound.volume * volumeScale));
-        audio.playbackRate = Math.max(0.6, Math.min(1.6, playbackRate));
+        safeSetPlaybackRate(audio);
         try {
           audio.currentTime = 0;
         } catch {

@@ -47,6 +47,184 @@ function isStandaloneDisplayMode() {
 function isIosDevice() {
   return /iPhone|iPad|iPod/i.test(window.navigator?.userAgent || "");
 }
+const IOS_PERF_SAFE_MODE = isIosDevice();
+
+function initKynetraSplash(config = {}) {
+  const splash = document.getElementById("ksplash");
+  const bg = document.getElementById("ks-bg");
+  const fill = document.getElementById("ks-fill");
+  const pct = document.getElementById("ks-pct");
+  const label = document.getElementById("ks-label");
+  if (!(splash instanceof HTMLElement) || !(bg instanceof HTMLCanvasElement) || !(fill instanceof HTMLElement) || !(pct instanceof HTMLElement) || !(label instanceof HTMLElement)) {
+    return () => {};
+  }
+
+  if (splash.dataset.started === "1") {
+    return () => {
+      splash.dataset.ready = "1";
+    };
+  }
+  splash.dataset.started = "1";
+
+  const minDurationMs = Math.max(900, Number(config.minDurationMs || 1500));
+  const maxDurationMs = Math.max(minDurationMs + 500, Number(config.maxDurationMs || 7000));
+  const closeDelayMs = Math.max(80, Number(config.closeDelayMs || 130));
+
+  const ctx2 = bg.getContext("2d", { alpha: false });
+  let dpr = 1;
+  let bw = 0;
+  let bh = 0;
+  let particles = [];
+  let rafBg = 0;
+  let rafLoad = 0;
+  let closed = false;
+  let ready = false;
+  const labels = ["YUKLENIYOR", "HAZIRLANIYOR", "BASLATILIYOR", "HAZIR"];
+  const startedAt = performance.now();
+  let progress = 0;
+
+  const onResize = () => {
+    dpr = Math.min(window.devicePixelRatio || 1, 1.8);
+    bw = Math.max(window.innerWidth || 0, 1);
+    bh = Math.max(window.innerHeight || 0, 1);
+    bg.width = Math.floor(bw * dpr);
+    bg.height = Math.floor(bh * dpr);
+    bg.style.width = `${bw}px`;
+    bg.style.height = `${bh}px`;
+    if (ctx2) {
+      ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    const count = Math.min(110, Math.max(48, Math.round((bw * bh) / 24000)));
+    particles = Array.from({ length: count }, () => ({
+      x: Math.random() * bw,
+      y: Math.random() * bh,
+      r: 0.6 + (Math.random() * 1.6),
+      vy: 0.08 + (Math.random() * 0.28),
+      a: 0.04 + (Math.random() * 0.2),
+      tw: Math.random() * Math.PI * 2,
+      neon: Math.random() > 0.68,
+    }));
+  };
+
+  const setProgressLabel = (value) => {
+    if (value < 34) {
+      label.textContent = labels[0];
+    } else if (value < 68) {
+      label.textContent = labels[1];
+    } else if (value < 100) {
+      label.textContent = labels[2];
+    } else {
+      label.textContent = labels[3];
+    }
+  };
+
+  const closeSplash = () => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    window.removeEventListener("resize", onResize);
+    if (rafBg) {
+      cancelAnimationFrame(rafBg);
+      rafBg = 0;
+    }
+    if (rafLoad) {
+      cancelAnimationFrame(rafLoad);
+      rafLoad = 0;
+    }
+    window.setTimeout(() => {
+      splash.classList.add("ks-hide");
+      window.setTimeout(() => {
+        splash.style.display = "none";
+        window.dispatchEvent(new CustomEvent("kynetra-splash-done"));
+      }, 560);
+    }, closeDelayMs);
+  };
+
+  const drawBg = (timestamp) => {
+    if (closed || !ctx2) {
+      return;
+    }
+    ctx2.fillStyle = "#07000d";
+    ctx2.fillRect(0, 0, bw, bh);
+    for (let i = 0; i < particles.length; i += 1) {
+      const p = particles[i];
+      p.y -= p.vy;
+      p.tw += 0.018;
+      if (p.y < -5) {
+        p.y = bh + 5;
+        p.x = Math.random() * bw;
+      }
+      const tw = 0.65 + (Math.sin(p.tw + (timestamp * 0.0012)) * 0.35);
+      ctx2.globalAlpha = p.a * tw;
+      ctx2.fillStyle = p.neon ? "#7c3aed" : "#f3f8ff";
+      ctx2.beginPath();
+      ctx2.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx2.fill();
+    }
+    ctx2.globalAlpha = 1;
+    rafBg = requestAnimationFrame(drawBg);
+  };
+
+  const animateLoad = () => {
+    if (closed) {
+      return;
+    }
+    const elapsed = performance.now() - startedAt;
+    if (elapsed >= maxDurationMs || splash.dataset.ready === "1") {
+      ready = true;
+    }
+
+    let target = 0;
+    if (ready) {
+      target = 100;
+    } else if (elapsed < 520) {
+      target = 30;
+    } else if (elapsed < 980) {
+      target = 56;
+    } else if (elapsed < minDurationMs) {
+      target = 76;
+    } else {
+      target = 90;
+    }
+
+    const smooth = ready ? 0.22 : 0.08;
+    const noise = ready ? 0.08 : (Math.random() * 0.22);
+    const next = progress + Math.max(0.12, ((target - progress) * smooth) + noise);
+    progress = Math.min(target, next);
+
+    if (ready && progress > 99.4) {
+      progress = 100;
+    }
+
+    const value = Math.round(progress);
+    fill.style.width = `${value}%`;
+    pct.textContent = `${value}%`;
+    setProgressLabel(value);
+
+    if (value >= 100) {
+      closeSplash();
+      return;
+    }
+    rafLoad = requestAnimationFrame(animateLoad);
+  };
+
+  onResize();
+  window.addEventListener("resize", onResize, { passive: true });
+  rafBg = requestAnimationFrame(drawBg);
+  rafLoad = requestAnimationFrame(animateLoad);
+
+  return () => {
+    ready = true;
+    splash.dataset.ready = "1";
+  };
+}
+
+const markKynetraSplashReady = initKynetraSplash({
+  minDurationMs: 1500,
+  maxDurationMs: IOS_PERF_SAFE_MODE ? 7000 : 5200,
+  closeDelayMs: 130,
+});
 
 function toPxNumber(value) {
   const parsed = Number.parseFloat(value);
@@ -422,10 +600,6 @@ document.addEventListener("contextmenu", (event) => {
   if (!(target instanceof Node)) {
     return;
   }
-  const gameShell = document.getElementById("game-shell");
-  if (!(gameShell instanceof HTMLElement) || !gameShell.contains(target)) {
-    return;
-  }
   if (shouldIgnoreCalloutSuppression(target)) {
     return;
   }
@@ -437,14 +611,36 @@ document.addEventListener("selectstart", (event) => {
   if (!(target instanceof Node)) {
     return;
   }
-  const gameShell = document.getElementById("game-shell");
-  if (!(gameShell instanceof HTMLElement) || !gameShell.contains(target)) {
+  if (shouldIgnoreCalloutSuppression(target)) {
+    return;
+  }
+  event.preventDefault();
+}, { capture: true });
+
+document.addEventListener("dragstart", (event) => {
+  const target = event.target;
+  if (!(target instanceof Node)) {
     return;
   }
   if (shouldIgnoreCalloutSuppression(target)) {
     return;
   }
   event.preventDefault();
+}, { capture: true });
+
+document.addEventListener("touchend", (event) => {
+  const target = event.target;
+  if (!(target instanceof Node)) {
+    return;
+  }
+  if (shouldIgnoreCalloutSuppression(target)) {
+    return;
+  }
+  try {
+    window.getSelection()?.removeAllRanges();
+  } catch {
+    // ignore
+  }
 }, { capture: true });
 
 if ("serviceWorker" in navigator) {
@@ -544,7 +740,7 @@ const state = new GameStateManager(TUNING, { progression, telemetry });
 mountJourneyScreenPartial();
 const ui = new UIManager(TUNING);
 const audio = new SoundManager();
-void audio.preloadAll();
+void audio.prewarmForGameplay?.();
 const haptics = new Haptics();
 const powerHub = initPowerHubUi({ state, ui });
 const smartPraiseState = {
@@ -2517,6 +2713,7 @@ let pendingMilestoneUnlock = null;
 let achievementUnlockTracker = null;
 let mascotReaction = null;
 let audioPreloadRequested = false;
+let audioInteractionPrimed = false;
 const settingsPhotoPickerInput = document.getElementById("settings-photo-picker");
 let classicPhotoBoardImageDataUrl = loadPhotoBoardImageDataUrl();
 let classicPhotoBoardTiles = [];
@@ -3641,16 +3838,21 @@ if (classicPhotoBoardImageDataUrl) {
   });
 }
 
-async function primeAudioForInteraction() {
+async function primeAudioForInteraction({ force = false } = {}) {
+  if (audioInteractionPrimed && !force) {
+    return;
+  }
   try {
     await audio.unlock();
+    audioInteractionPrimed = true;
   } catch {
     // Ignore unlock failures in restrictive webviews.
   }
-  if (!audioPreloadRequested) {
-    audioPreloadRequested = true;
-    void audio.preloadAll();
+  if (audioPreloadRequested) {
+    return;
   }
+  audioPreloadRequested = true;
+  void audio.prewarmForGameplay?.();
 }
 
 ui.setBadgeUnlockPopupShownHandler(() => {
@@ -3682,13 +3884,14 @@ const dragDrop = new DragDropController(state, ui, {
   },
 });
 
-window.addEventListener("pointerdown", () => {
+const primeAudioFromGesture = () => {
   void primeAudioForInteraction();
-}, { once: true, capture: true });
-
-window.addEventListener("touchstart", () => {
-  void primeAudioForInteraction();
-}, { once: true, passive: true, capture: true });
+};
+window.addEventListener("pointerdown", primeAudioFromGesture, { passive: true, capture: true });
+window.addEventListener("pointerup", primeAudioFromGesture, { passive: true, capture: true });
+window.addEventListener("touchstart", primeAudioFromGesture, { passive: true, capture: true });
+window.addEventListener("touchend", primeAudioFromGesture, { passive: true, capture: true });
+window.addEventListener("click", primeAudioFromGesture, { capture: true });
 
 if (settingsPhotoPickerInput) {
   settingsPhotoPickerInput.addEventListener("change", async () => {
@@ -4284,6 +4487,8 @@ state.on("state", (snapshot) => {
 document.addEventListener("visibilitychange", () => {
   syncFxSuspension(state.getSnapshot());
   if (!document.hidden) {
+    audioInteractionPrimed = false;
+    void primeAudioForInteraction({ force: true });
     rescheduleDailyRewardReminder({ requestPermission: false });
   }
 });
@@ -4465,6 +4670,29 @@ state.on("cleared", (payload) => {
     Math.min(440, Math.max(0, comboVisualChain - 1) * 170);
   lastClearFxEndsAtMs = lastClearFxAtMs + estimatedClearFxMs;
 
+  if (IOS_PERF_SAFE_MODE) {
+    runAfterFrames(0, () => {
+      ui.playClearFeedback(normalizedClearPayload);
+      ui.spawnClearBurstText(normalizedClearPayload);
+      ui.pulseScore();
+    });
+    if (isComboClear) {
+      haptics.combo();
+      ui.playComboFeedback(comboVisualChain);
+      ui.playComboAccent(normalizedClearPayload);
+      ui.spawnComboBurstText(comboVisualChain, normalizedClearPayload);
+      mascotReaction?.play?.("ambitious");
+    } else {
+      haptics.clear();
+      if (lineCount === 1) {
+        mascotReaction?.play?.("happy");
+      } else if (lineCount >= 2) {
+        mascotReaction?.play?.("ambitious");
+      }
+    }
+    return;
+  }
+
   // Spread clear/combo feedback across adjacent frames to reduce single-frame spikes.
   runAfterFrames(0, () => {
     ui.playClearFeedback(normalizedClearPayload);
@@ -4568,7 +4796,7 @@ state.on("gameOver", (payload) => {
 });
 
 dragDrop.init();
-const INITIAL_RENDER_PRELOAD_BUDGET_MS = 260;
+const INITIAL_RENDER_PRELOAD_BUDGET_MS = isIosDevice() ? 1400 : 260;
 let initialRenderDone = false;
 const performInitialRender = () => {
   if (initialRenderDone) {
@@ -4580,6 +4808,7 @@ const performInitialRender = () => {
   layoutGuardStatus = snapshot.status;
   scheduleLayoutGuards();
   mascotReaction = createMascotReactionOverlay();
+  markKynetraSplashReady();
 };
 const preloadPromise = ui.preloadCoreGameplaySprites?.();
 if (preloadPromise?.then) {

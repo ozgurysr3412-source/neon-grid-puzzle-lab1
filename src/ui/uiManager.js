@@ -431,44 +431,44 @@ function resolveFxQualityProfile() {
     return {
       lowPower: true,
       isIOS: true,
-      particleScale: 0.42,
-      comboParticleScale: 0.5,
-      dprCap: 1.12,
-      maxParticles: 96,
-      minParticleBudget: 24,
+      particleScale: 0.28,
+      comboParticleScale: 0.34,
+      dprCap: 1,
+      maxParticles: 56,
+      minParticleBudget: 14,
       trailLength: 0,
-      glowPasses: 1,
+      glowPasses: 0,
       enableSmoke: false,
       // Keep animation progression smooth under temporary frame drops.
-      maxFrameStep: 2,
-      ringShadowBlur: 2.4,
-      particleShadowBlur: 2.8,
-      chunkShadowBlur: 2.2,
+      maxFrameStep: 1,
+      ringShadowBlur: 0,
+      particleShadowBlur: 0,
+      chunkShadowBlur: 0,
       simpleShading: true,
       useTexturedShards: false,
-      clearFxCellCap: 8,
-      shatterScale: 0.58,
-      afterburstCount: 3,
-      startRuntimeScale: 0.84,
-      minRuntimeScale: 0.44,
+      clearFxCellCap: 5,
+      shatterScale: 0.42,
+      afterburstCount: 1,
+      startRuntimeScale: 0.62,
+      minRuntimeScale: 0.34,
       forceLiteTextures: true,
-      domFxCapScale: 0.64,
+      domFxCapScale: 0.38,
       // Preserve stronger clear FX at start, then reduce progressively for heat control.
-      thermalTier1Ms: 6 * 60 * 1000,
-      thermalTier2Ms: 13 * 60 * 1000,
-      thermalTier3Ms: 20 * 60 * 1000,
-      thermalTier1DomFxScale: 0.95,
-      thermalTier2DomFxScale: 0.84,
-      thermalTier3DomFxScale: 0.72,
-      thermalTier1ScaleCeiling: 0.92,
-      thermalTier2ScaleCeiling: 0.8,
-      thermalTier3ScaleCeiling: 0.7,
-      startupWarmMs: 8 * 1000,
-      startupScaleCeiling: 0.9,
-      adaptiveHardMs: 27,
-      adaptiveMidMs: 23.2,
-      adaptiveSoftMs: 20.2,
-      adaptiveRecoverMs: 17.2,
+      thermalTier1Ms: 3 * 60 * 1000,
+      thermalTier2Ms: 6 * 60 * 1000,
+      thermalTier3Ms: 9 * 60 * 1000,
+      thermalTier1DomFxScale: 0.82,
+      thermalTier2DomFxScale: 0.62,
+      thermalTier3DomFxScale: 0.44,
+      thermalTier1ScaleCeiling: 0.68,
+      thermalTier2ScaleCeiling: 0.56,
+      thermalTier3ScaleCeiling: 0.44,
+      startupWarmMs: 2 * 1000,
+      startupScaleCeiling: 0.64,
+      adaptiveHardMs: 22,
+      adaptiveMidMs: 19.2,
+      adaptiveSoftMs: 17.8,
+      adaptiveRecoverMs: 16.2,
     };
   }
 
@@ -3156,6 +3156,11 @@ export class UIManager {
     setTimeout(() => {
       this.elements.boardWrap.classList.remove("board-wrap--combo-accent");
     }, accentMs);
+
+    // iOS: keep combo accent visual but skip heavy ring/particle work.
+    if (this.fxProfile?.isIOS) {
+      return;
+    }
 
     this.fxRings.push({
       x: centerX,

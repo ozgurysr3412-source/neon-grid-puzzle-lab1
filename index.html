@@ -17,10 +17,43 @@
       href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Baloo+2:wght@800&family=Cinzel:wght@700;800;900&family=Rajdhani:wght@500;600;700&family=Space+Grotesk:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles/main.css?v=20260511nosplash1" />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles/main.css?v=20260513splash2" />
     <link rel="stylesheet" href="./styles/journey.css?v=20260430journey8" />
   </head>
   <body>
+    <div id="ksplash" aria-label="Kynetra Studios acilis ekrani">
+      <canvas id="ks-bg"></canvas>
+      <div class="ks-corner ks-tl"><svg viewBox="0 0 32 32" fill="none"><path d="M2 30 L2 2 L30 2" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="ks-corner ks-tr"><svg viewBox="0 0 32 32" fill="none"><path d="M2 30 L2 2 L30 2" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="ks-corner ks-bl"><svg viewBox="0 0 32 32" fill="none"><path d="M2 30 L2 2 L30 2" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="ks-corner ks-br"><svg viewBox="0 0 32 32" fill="none"><path d="M2 30 L2 2 L30 2" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="ks-center">
+        <div class="ks-ring">
+          <svg viewBox="0 0 154 154" fill="none" aria-hidden="true">
+            <circle cx="77" cy="77" r="70" stroke="rgba(124,58,237,.3)" stroke-width="1.2"/>
+            <path d="M77 7 A70 70 0 0 1 147 77" stroke="#7c3aed" stroke-width="2.6" stroke-linecap="round"/>
+            <path d="M77 7 A70 70 0 0 1 130 31" stroke="#22d3ee" stroke-width="2.2" stroke-linecap="round" opacity=".55"/>
+            <circle cx="147" cy="77" r="3.2" fill="#22d3ee"/>
+            <circle cx="147" cy="77" r="6.1" fill="rgba(34,211,238,.25)"/>
+          </svg>
+          <div class="ks-logo">
+            <div class="ks-mark">K</div>
+            <div class="ks-submark">STUDIOS</div>
+          </div>
+        </div>
+        <div class="ks-name">KYNETRA</div>
+        <div class="ks-sub">MOBILE STUDIO</div>
+      </div>
+      <div class="ks-bar-wrap">
+        <div class="ks-track"><div id="ks-fill" class="ks-fill"></div></div>
+        <div class="ks-meta">
+          <div id="ks-label" class="ks-label">YUKLENIYOR</div>
+          <div id="ks-pct" class="ks-pct">0%</div>
+        </div>
+      </div>
+      <div class="ks-ver">v1.0</div>
+    </div>
     <div class="app-shell" id="game-shell">
       <header class="top-strip">
         <div class="profile-badge" aria-label="Best score badge">
@@ -455,7 +488,7 @@
         measurementId: "G-MM3HSX1BMY",
       };
     </script>
-    <script type="module" src="./src/main.js?v=20260511nosplash1"></script>
+    <script type="module" src="./src/main.js?v=20260513splash2"></script>
   </body>
 </html>
 
