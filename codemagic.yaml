@@ -15,7 +15,7 @@ workflows:
         BUNDLE_ID: "com.ozgur72.gridcrownblockblast"
         XCODE_WORKSPACE: "App.xcworkspace"
         XCODE_SCHEME: "App"
-        ADMOB_IOS_APP_ID: "ca-app-pub-3940256099942544~1458002511"
+        ADMOB_IOS_APP_ID: "ca-app-pub-4788652923724034~5337780715"
 
     scripts:
       - name: Install npm dependencies
@@ -74,12 +74,16 @@ workflows:
         BUNDLE_ID: "com.ozgur72.gridcrownblockblast"
         XCODE_WORKSPACE: "App.xcworkspace"
         XCODE_SCHEME: "App"
-        ADMOB_IOS_APP_ID: "ca-app-pub-3940256099942544~1458002511"
+        ADMOB_IOS_APP_ID: "ca-app-pub-4788652923724034~5337780715"
 
     scripts:
       - name: Install npm dependencies
         script: |
           npm ci
+
+      - name: Force production AdMob mode for App Store build
+        script: |
+          node -e "const fs=require('fs');const p='src/main.js';let s=fs.readFileSync(p,'utf8');const from='const ADMOB_USE_TEST_ADS = true;';const to='const ADMOB_USE_TEST_ADS = false;';if(!s.includes(from)&&!s.includes(to)){throw new Error('ADMOB flag not found in src/main.js');}s=s.replace(from,to);fs.writeFileSync(p,s);"
 
       - name: Build web assets
         script: |
