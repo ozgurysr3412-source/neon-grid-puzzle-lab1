@@ -1,12 +1,16 @@
 import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const distDir = path.join(projectRoot, "dist");
 const optimizationMapPath = path.join(projectRoot, "scripts", "runtime-asset-optimization-map.json");
+const execFileAsync = promisify(execFile);
+const criticalRuntimeFiles = ["src/ui/localization.js"];
 
 const copyTargets = [
   "index.html",
@@ -96,7 +100,24 @@ async function loadOptimizedOriginalSkipSet() {
   }
 }
 
+async function assertGitTracksCriticalRuntimeFiles() {
+  for (const relPath of criticalRuntimeFiles) {
+    try {
+      await execFileAsync("git", ["ls-files", "--error-unmatch", relPath], {
+        cwd: projectRoot,
+      });
+    } catch (error) {
+      throw new Error(
+        `Critical runtime file is missing from Git index: ${relPath}. `
+        + "Run: git add "
+        + relPath,
+      );
+    }
+  }
+}
+
 async function buildWeb() {
+  await assertGitTracksCriticalRuntimeFiles();
   await rm(distDir, { recursive: true, force: true });
   await mkdir(distDir, { recursive: true });
   const optimizedSourceSkipSet = await loadOptimizedOriginalSkipSet();

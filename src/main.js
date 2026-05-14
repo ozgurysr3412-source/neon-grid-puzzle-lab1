@@ -227,9 +227,27 @@ function initKynetraSplash(config = {}) {
 }
 
 const markKynetraSplashReady = initKynetraSplash({
-  minDurationMs: 1500,
-  maxDurationMs: IOS_PERF_SAFE_MODE ? 7000 : 5200,
+  minDurationMs: IOS_PERF_SAFE_MODE ? 950 : 820,
+  maxDurationMs: IOS_PERF_SAFE_MODE ? 3600 : 3000,
   closeDelayMs: 130,
+});
+let splashReadyEmitted = false;
+function safeMarkKynetraSplashReady(reason = "unknown") {
+  if (splashReadyEmitted) {
+    return;
+  }
+  splashReadyEmitted = true;
+  try {
+    markKynetraSplashReady?.();
+  } catch (error) {
+    console.warn(`[startup] failed to close splash (${reason}).`, error);
+  }
+}
+window.addEventListener("error", () => {
+  safeMarkKynetraSplashReady("window-error");
+});
+window.addEventListener("unhandledrejection", () => {
+  safeMarkKynetraSplashReady("unhandled-rejection");
 });
 
 function toPxNumber(value) {
@@ -730,6 +748,23 @@ const ADMOB_PLATFORM = (() => {
     return "web";
   }
 })();
+const SCREENSHOT_MODE = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return params.get("ss") === "1" || params.get("screenshot") === "1";
+  } catch {
+    return false;
+  }
+})();
+const AUTO_OPEN_JOURNEY = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return params.get("journey") === "1" || params.get("openJourney") === "1";
+  } catch {
+    return false;
+  }
+})();
+const SCREENSHOT_JOURNEY_UNLOCK_LEVEL = 10;
 const ADMOB_ACTIVE_IDS = ADMOB_PLATFORM === "ios"
   ? {
       appId: ADMOB_IOS_APP_ID,
@@ -2725,6 +2760,10 @@ async function buildLeaderboardData(snapshot, profile, { syncScores = true } = {
 
 const runtimeSettings = loadRuntimeSettings();
 let removeAdsUnlocked = loadRemoveAdsUnlocked();
+if (SCREENSHOT_MODE) {
+  // Screenshot mode: hide monetization UI and keep capture flow clean.
+  removeAdsUnlocked = true;
+}
 let leaderboardProfile = loadLeaderboardProfile();
 let shopDailyLastClaimAtMs = loadShopDailyLastClaimAtMs();
 let rewardedContinueUsage = loadRewardedContinueUsage();
@@ -4062,7 +4101,12 @@ ui.bindControls({
     approvalState.lastTurn = -99;
     approvalState.lastAtMs = 0;
     audio.playUiTap({ id: "start-adventure" });
-    const level = progression.getAdventureCurrentLevel(ADVENTURE_MAX_LEVEL);
+    const level = SCREENSHOT_MODE
+      ? Math.max(
+        1,
+        Math.min(ADVENTURE_MAX_LEVEL, SCREENSHOT_JOURNEY_UNLOCK_LEVEL),
+      )
+      : progression.getAdventureCurrentLevel(ADVENTURE_MAX_LEVEL);
     state.startGame({ mode: "adventure", level });
   },
   onOpenJourney: async () => {
@@ -4072,11 +4116,18 @@ ui.bindControls({
     audio.playUiTap({ id: "open-journey" });
     const snapshot = state.getSnapshot();
     const progress = snapshot.adventureProgress ?? {};
-    const level = progress.currentLevel ?? progression.getAdventureCurrentLevel(ADVENTURE_MAX_LEVEL);
+    const levelFromProgress = progress.currentLevel ?? progression.getAdventureCurrentLevel(ADVENTURE_MAX_LEVEL);
+    const screenshotLevel = Math.max(
+      1,
+      Math.min(ADVENTURE_MAX_LEVEL, SCREENSHOT_JOURNEY_UNLOCK_LEVEL),
+    );
+    const currentLevel = SCREENSHOT_MODE
+      ? screenshotLevel
+      : levelFromProgress;
     ui.openJourneyPanel({
       totalLevels: 100,
-      playableMaxLevel: ADVENTURE_MAX_LEVEL,
-      currentLevel: level,
+      playableMaxLevel: SCREENSHOT_MODE ? screenshotLevel : ADVENTURE_MAX_LEVEL,
+      currentLevel,
       completed: progress.completed ?? {},
     });
   },
@@ -4924,19 +4975,41 @@ state.on("gameOver", (payload) => {
 });
 
 dragDrop.init();
-const INITIAL_RENDER_PRELOAD_BUDGET_MS = isIosDevice() ? 1400 : 260;
+const INITIAL_RENDER_PRELOAD_BUDGET_MS = isIosDevice() ? 950 : 240;
 let initialRenderDone = false;
 const performInitialRender = () => {
   if (initialRenderDone) {
     return;
   }
   initialRenderDone = true;
-  const snapshot = state.getSnapshot();
-  ui.render(snapshot);
-  layoutGuardStatus = snapshot.status;
-  scheduleLayoutGuards();
-  mascotReaction = createMascotReactionOverlay();
-  markKynetraSplashReady();
+  try {
+    const snapshot = state.getSnapshot();
+    ui.render(snapshot);
+    if (AUTO_OPEN_JOURNEY && snapshot.status === "menu") {
+      const progress = snapshot.adventureProgress ?? {};
+      const levelFromProgress = progress.currentLevel ?? progression.getAdventureCurrentLevel(ADVENTURE_MAX_LEVEL);
+      const screenshotLevel = Math.max(
+        1,
+        Math.min(ADVENTURE_MAX_LEVEL, SCREENSHOT_JOURNEY_UNLOCK_LEVEL),
+      );
+      const currentLevel = SCREENSHOT_MODE
+        ? screenshotLevel
+        : levelFromProgress;
+      ui.openJourneyPanel({
+        totalLevels: 100,
+        playableMaxLevel: SCREENSHOT_MODE ? screenshotLevel : ADVENTURE_MAX_LEVEL,
+        currentLevel,
+        completed: progress.completed ?? {},
+      });
+    }
+    layoutGuardStatus = snapshot.status;
+    scheduleLayoutGuards();
+    mascotReaction = createMascotReactionOverlay();
+  } catch (error) {
+    console.warn("[startup] initial render failed.", error);
+  } finally {
+    safeMarkKynetraSplashReady("initial-render");
+  }
 };
 const preloadPromise = ui.preloadCoreGameplaySprites?.();
 if (preloadPromise?.then) {
