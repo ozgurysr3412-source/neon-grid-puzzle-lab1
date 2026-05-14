@@ -83,9 +83,9 @@ workflows:
         script: |
           npm ci
 
-      - name: Force production AdMob mode for App Store build
+      - name: Validate production AdMob mode
         script: |
-          node -e "const fs=require('fs');const p='src/main.js';let s=fs.readFileSync(p,'utf8');const from='const ADMOB_USE_TEST_ADS = true;';const to='const ADMOB_USE_TEST_ADS = false;';if(!s.includes(from)&&!s.includes(to)){throw new Error('ADMOB flag not found in src/main.js');}s=s.replace(from,to);fs.writeFileSync(p,s);"
+          node -e "const fs=require('fs');const p='src/main.js';const s=fs.readFileSync(p,'utf8');if(!s.includes('const ADMOB_USE_TEST_ADS = false;')){throw new Error('Production AdMob mode must be false in src/main.js');}"
 
       - name: Build web assets
         script: |

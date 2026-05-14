@@ -11,7 +11,13 @@ import { createAdMobService } from "./platform/adMobService.js";
 import { createLocalNotificationService } from "./platform/localNotificationService.js";
 import { createPlayBillingService } from "./platform/playBillingService.js";
 import { mountJourneyScreenPartial } from "./ui/journey/journeyScreenPartial.js";
-import { UIManager } from "./ui/uiManager.js?v=20260430perf2";
+import {
+  applyStaticTranslations,
+  detectAndApplyLocale,
+  getPackLocalizedText,
+  t,
+} from "./ui/localization.js";
+import { UIManager } from "./ui/uiManager.js?v=20260513lang1";
 
 let layoutGuardRafId = 0;
 let layoutGuardStatus = "menu";
@@ -669,6 +675,7 @@ const PHOTO_BOARD_IMAGE_STORAGE_KEY = "neon-grid-photo-board-image-v1";
 const SHOP_DAILY_REWARD_LAST_CLAIM_KEY = "neon-grid-shop-daily-last-claim-v1";
 const SHOP_PACK_GRANTED_TOKENS_STORAGE_KEY = "neon-grid-shop-pack-granted-tokens-v1";
 const REWARDED_CONTINUE_USAGE_STORAGE_KEY = "neon-grid-rewarded-continue-usage-v1";
+const GAMEOVER_INTERSTITIAL_COUNTER_STORAGE_KEY = "neon-grid-gameover-interstitial-counter-v1";
 const LEADERBOARD_PROFILE_STORAGE_KEY = "neon-grid-leaderboard-profile-v1";
 const LEADERBOARD_PLAYER_ID_STORAGE_KEY = "neon-grid-leaderboard-player-id-v1";
 const LEADERBOARD_FIREBASE_CONFIG_STORAGE_KEY = "neon-grid-firebase-config-v1";
@@ -681,7 +688,10 @@ const SHOP_BILLING_PRODUCT_IDS = Object.freeze({
   big: "big_pack",
 });
 const REWARDED_CONTINUE_DAILY_LIMIT = 5;
-const ADMOB_USE_TEST_ADS = true;
+const INTERSTITIAL_EVERY_NTH_GAME_OVER = 2;
+const GAMEOVER_INTERSTITIAL_DELAY_MS = 420;
+const CRITICAL_SFX_MIN_GAP_MS = 900;
+const ADMOB_USE_TEST_ADS = false;
 const ADMOB_ANDROID_APP_ID = ADMOB_USE_TEST_ADS
   ? "ca-app-pub-3940256099942544~3347511713"
   : "ca-app-pub-4788652923724034~1331997225";
@@ -738,6 +748,7 @@ const telemetry = new TelemetryStore(TUNING.STORAGE_KEY_TELEMETRY);
 const progression = new ProgressionManager(TUNING.STORAGE_KEY_PROGRESS, TUNING);
 const state = new GameStateManager(TUNING, { progression, telemetry });
 mountJourneyScreenPartial();
+detectAndApplyLocale();
 const ui = new UIManager(TUNING);
 const audio = new SoundManager();
 void audio.prewarmForGameplay?.();
@@ -2560,6 +2571,25 @@ function saveRewardedContinueUsage(usage) {
   }
 }
 
+function loadGameOverInterstitialCounter() {
+  try {
+    const raw = localStorage.getItem(GAMEOVER_INTERSTITIAL_COUNTER_STORAGE_KEY);
+    const parsed = Math.max(0, Math.floor(Number(raw) || 0));
+    return Number.isFinite(parsed) ? parsed : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveGameOverInterstitialCounter(value) {
+  try {
+    const safe = Math.max(0, Math.floor(Number(value) || 0));
+    localStorage.setItem(GAMEOVER_INTERSTITIAL_COUNTER_STORAGE_KEY, String(safe));
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
 function loadLeaderboardProfile() {
   const fallback = {
     name: "Player",
@@ -2698,6 +2728,7 @@ let removeAdsUnlocked = loadRemoveAdsUnlocked();
 let leaderboardProfile = loadLeaderboardProfile();
 let shopDailyLastClaimAtMs = loadShopDailyLastClaimAtMs();
 let rewardedContinueUsage = loadRewardedContinueUsage();
+let gameOverInterstitialCounter = loadGameOverInterstitialCounter();
 let shopCountdownIntervalId = 0;
 let menuShopViewOpen = false;
 let menuShopPackIndex = 0;
@@ -2714,6 +2745,9 @@ let achievementUnlockTracker = null;
 let mascotReaction = null;
 let audioPreloadRequested = false;
 let audioInteractionPrimed = false;
+let pendingGameOverInterstitialTimerId = 0;
+let lastGameOverSfxAtMs = -Infinity;
+let lastLevelCompleteSfxAtMs = -Infinity;
 const settingsPhotoPickerInput = document.getElementById("settings-photo-picker");
 let classicPhotoBoardImageDataUrl = loadPhotoBoardImageDataUrl();
 let classicPhotoBoardTiles = [];
@@ -2724,6 +2758,7 @@ const adMobService = createAdMobService({
   bannerAdId: ADMOB_ACTIVE_IDS.bannerAdId,
   interstitialAdId: ADMOB_ACTIVE_IDS.interstitialAdId,
   rewardedAdId: ADMOB_ACTIVE_IDS.rewardedAdId,
+  interstitialCooldownMs: 1500,
   testing: ADMOB_USE_TEST_ADS,
 });
 const playBillingService = createPlayBillingService({
@@ -2752,6 +2787,7 @@ if (!classicPhotoBoardImageDataUrl && runtimeSettings.photoBoardEnabled === true
   saveRuntimeSettings(runtimeSettings);
 }
 ui.setMenuBadgesUiVariant(BADGES_UI_VARIANT);
+applyStaticTranslations();
 audio.setEnabled(runtimeSettings.soundEnabled);
 haptics.setEnabled(runtimeSettings.hapticsEnabled);
 audio.setRelaxingMode(runtimeSettings.relaxingModeEnabled);
@@ -2770,7 +2806,7 @@ function syncMenuSettingsButton() {
     menuButton.setAttribute("aria-pressed", muted ? "true" : "false");
   }
   if (subtitle) {
-    subtitle.textContent = muted ? "Sound off" : "Sound on";
+    subtitle.textContent = muted ? t("sound_off") : t("sound_on");
   }
 }
 
@@ -2844,18 +2880,18 @@ function syncRemoveAdsButtons() {
     menuBtn.classList.toggle("is-hidden", removeAdsUnlocked);
     menuBtn.classList.toggle("is-active", removeAdsUnlocked);
     menuBtn.setAttribute("aria-pressed", removeAdsUnlocked ? "true" : "false");
-    menuBtn.setAttribute("aria-label", removeAdsUnlocked ? "Ads Removed" : "Remove Ads");
+    menuBtn.setAttribute("aria-label", removeAdsUnlocked ? t("ads_removed") : t("remove_ads"));
     menuBtn.hidden = removeAdsUnlocked;
   }
   if (menuShopBtn) {
     menuShopBtn.classList.toggle("menu-shop-open-btn--ads-hidden", removeAdsUnlocked);
   }
   if (menuLabel) {
-    menuLabel.textContent = removeAdsUnlocked ? "Ads Removed" : "Remove Ads";
+    menuLabel.textContent = removeAdsUnlocked ? t("ads_removed") : t("remove_ads");
   }
   if (settingsBtn) {
     settingsBtn.classList.toggle("is-active", removeAdsUnlocked);
-    settingsBtn.textContent = removeAdsUnlocked ? "Ads Removed" : "Remove Ads";
+    settingsBtn.textContent = removeAdsUnlocked ? t("ads_removed") : t("remove_ads");
     settingsBtn.setAttribute("aria-pressed", removeAdsUnlocked ? "true" : "false");
   }
 }
@@ -2900,13 +2936,65 @@ function syncGameOverContinueUi(snapshot = state.getSnapshot()) {
   button.disabled = !enabled;
   button.setAttribute("aria-disabled", enabled ? "false" : "true");
   if (label) {
-    label.textContent = "Watch Ad Continue";
+    label.textContent = t("watch_ad_continue");
   }
   if (subLabel) {
     subLabel.textContent = adReadyFlow
-      ? `${remaining}/${REWARDED_CONTINUE_DAILY_LIMIT} today`
-      : "Native Android only";
+      ? t("rewarded_today", { count: remaining, limit: REWARDED_CONTINUE_DAILY_LIMIT })
+      : t("native_android_only");
   }
+}
+
+function playGameOverSfxOnce() {
+  const now = performance.now();
+  if ((now - lastGameOverSfxAtMs) < CRITICAL_SFX_MIN_GAP_MS) {
+    return false;
+  }
+  lastGameOverSfxAtMs = now;
+  audio.playGameOver();
+  return true;
+}
+
+function playLevelCompleteSfxOnce() {
+  const now = performance.now();
+  if ((now - lastLevelCompleteSfxAtMs) < CRITICAL_SFX_MIN_GAP_MS) {
+    return false;
+  }
+  lastLevelCompleteSfxAtMs = now;
+  audio.playLevelComplete();
+  return true;
+}
+
+function cancelPendingGameOverInterstitial() {
+  if (!pendingGameOverInterstitialTimerId) {
+    return;
+  }
+  window.clearTimeout(pendingGameOverInterstitialTimerId);
+  pendingGameOverInterstitialTimerId = 0;
+}
+
+function scheduleGameOverInterstitial() {
+  if (removeAdsUnlocked) {
+    return;
+  }
+  gameOverInterstitialCounter = Math.max(0, gameOverInterstitialCounter + 1);
+  saveGameOverInterstitialCounter(gameOverInterstitialCounter);
+  if (INTERSTITIAL_EVERY_NTH_GAME_OVER > 1) {
+    const shouldShow = (gameOverInterstitialCounter % INTERSTITIAL_EVERY_NTH_GAME_OVER) === 0;
+    if (!shouldShow) {
+      return;
+    }
+  }
+
+  cancelPendingGameOverInterstitial();
+  pendingGameOverInterstitialTimerId = window.setTimeout(async () => {
+    pendingGameOverInterstitialTimerId = 0;
+    const latest = state.getSnapshot();
+    if (!latest || latest.status !== "over" || removeAdsUnlocked) {
+      return;
+    }
+    await adMobService.showInterstitial();
+  }, GAMEOVER_INTERSTITIAL_DELAY_MS);
 }
 
 function getRemoveAdsModalElements() {
@@ -3006,34 +3094,34 @@ function syncRemoveAdsModalUi() {
   }
   if (removeAdsUnlocked) {
     if (title) {
-      title.textContent = "Ads Removed";
+      title.textContent = t("ads_removed");
     }
     if (description) {
-      description.textContent = "Gameplay banner/interstitial ads are disabled. Rewarded ads stay optional for extra rewards.";
+      description.textContent = t("remove_ads_desc_active");
     }
     if (purchaseBtn) {
-      purchaseBtn.textContent = "Already Active";
+      purchaseBtn.textContent = t("already_active");
       purchaseBtn.disabled = true;
     }
     if (cancelBtn) {
-      cancelBtn.textContent = "Close";
+      cancelBtn.textContent = t("close");
     }
     return;
   }
   if (title) {
-    title.textContent = "Go Ad-Free";
+    title.textContent = t("remove_ads_title");
   }
   if (description) {
-    description.textContent = "Removes in-game banner/interstitial ads. Rewarded ads stay optional for extra rewards.";
+    description.textContent = t("remove_ads_desc_offer");
   }
   if (purchaseBtn) {
     purchaseBtn.textContent = removeAdsModalPurchaseInFlight
-      ? "Processing..."
-      : `Pay ${getRemoveAdsPriceLabel()}`;
+      ? t("processing")
+      : t("pay", { price: getRemoveAdsPriceLabel() });
     purchaseBtn.disabled = removeAdsModalPurchaseInFlight;
   }
   if (cancelBtn) {
-    cancelBtn.textContent = removeAdsModalPurchaseInFlight ? "Wait..." : "Not Now";
+    cancelBtn.textContent = removeAdsModalPurchaseInFlight ? t("wait") : t("not_now");
     cancelBtn.disabled = removeAdsModalPurchaseInFlight;
   }
 }
@@ -3159,27 +3247,28 @@ function syncMenuShopPackUi() {
   }
   menuShopPackIndex = normalizeMenuShopPackIndex(menuShopPackIndex);
   const pack = SHOP_PACKS[menuShopPackIndex];
+  const localizedPack = getPackLocalizedText(pack);
   if (packImage) {
     packImage.src = pack.image;
-    packImage.alt = pack.name;
+    packImage.alt = localizedPack.name || pack.name;
   }
   if (packName) {
-    packName.textContent = pack.name;
+    packName.textContent = localizedPack.name || pack.name;
   }
   if (packMeta) {
-    packMeta.textContent = pack.meta;
+    packMeta.textContent = localizedPack.meta || pack.meta;
   }
   if (packBuyBtn) {
     const billingSupported = isShopPackPurchaseSupported(pack);
     const label = getMenuShopPackPriceLabel(pack);
-    packBuyBtn.textContent = menuShopPackPurchaseInFlight ? "Processing..." : label;
+    packBuyBtn.textContent = menuShopPackPurchaseInFlight ? t("processing") : label;
     packBuyBtn.dataset.packId = pack.id;
     packBuyBtn.disabled = menuShopPackPurchaseInFlight || !billingSupported;
     packBuyBtn.setAttribute(
       "aria-disabled",
       menuShopPackPurchaseInFlight || !billingSupported ? "true" : "false",
     );
-    packBuyBtn.title = billingSupported ? "" : "Purchases are available on Google Play Android builds only.";
+    packBuyBtn.title = billingSupported ? "" : t("purchase_only_android");
   }
 }
 
@@ -3217,20 +3306,20 @@ function syncMenuShopUi() {
     dailyCard.classList.toggle("is-ready", ready);
   }
   if (dailyStatusPill) {
-    dailyStatusPill.textContent = ready ? "Ready" : "Locked";
+    dailyStatusPill.textContent = ready ? t("ready") : t("locked");
     dailyStatusPill.classList.toggle("is-ready", ready);
   }
   if (dailyLockedRow) {
     dailyLockedRow.hidden = ready;
     const textNode = dailyLockedRow.querySelector("span");
     if (textNode) {
-      textNode.textContent = `Available in: ${countdownLabel}`;
+      textNode.textContent = t("available_in", { value: countdownLabel });
     }
   }
   if (dailyClaimBtn) {
     dailyClaimBtn.disabled = !ready;
     dailyClaimBtn.hidden = !ready;
-    dailyClaimBtn.textContent = "Collect reward";
+    dailyClaimBtn.textContent = t("collect_reward");
   }
   if (dailyRewardChips?.length) {
     for (const chip of dailyRewardChips) {
@@ -3351,7 +3440,7 @@ function unlockRemoveAds(source = "menu") {
   syncGameplayBannerVisibility(state.getSnapshot());
   void adMobService.removeBanner();
   if (source === "gameover") {
-    ui.setGameOverActionNote("Ads removed. Rewarded ads remain optional.");
+    ui.setGameOverActionNote(t("ads_removed_note"));
   }
 }
 
@@ -3365,7 +3454,7 @@ async function processRemoveAdsPurchase() {
     return;
   }
   if (!playBillingService.isSupported()) {
-    setRemoveAdsModalMessage("Purchases are available on Google Play Android builds only.");
+    setRemoveAdsModalMessage(t("purchase_only_android"));
     return;
   }
 
@@ -3817,24 +3906,56 @@ async function openSettingsPanel(source = "game") {
 syncMenuSettingsButton();
 syncRemoveAdsButtons();
 initRemoveAdsModalControls();
-void initRemoveAdsBillingFlow();
-void initShopPackBillingFlow();
 syncClassicPhotoBoardConfig();
 syncClassicPhotoBoardSettingsUi();
 startMenuShopTicker();
 syncMenuShopUi();
 syncGameplayBannerVisibility(state.getSnapshot());
 syncGameOverContinueUi(state.getSnapshot());
-rescheduleDailyRewardReminder({ requestPermission: true });
-void adMobService.initialize().then(() => {
-  syncGameOverContinueUi(state.getSnapshot());
-  syncGameplayBannerVisibility(state.getSnapshot());
-});
+
+function scheduleStartupTask(taskName, task, delayMs = 0) {
+  window.setTimeout(async () => {
+    try {
+      await task();
+    } catch (error) {
+      console.warn(`[startup] ${taskName} failed.`, error);
+    }
+  }, Math.max(0, Number(delayMs) || 0));
+}
+
+function initStartupServicesSafely() {
+  // Keep iOS first-launch stable: defer native init and avoid permission prompt at launch.
+  const isIos = ADMOB_PLATFORM === "ios";
+  const isAndroid = ADMOB_PLATFORM === "android";
+
+  if (isAndroid) {
+    scheduleStartupTask("remove-ads-billing", () => initRemoveAdsBillingFlow(), 500);
+    scheduleStartupTask("shop-pack-billing", () => initShopPackBillingFlow(), 900);
+  }
+
+  scheduleStartupTask("daily-reward-reminder", () => {
+    rescheduleDailyRewardReminder({ requestPermission: false });
+  }, isIos ? 3000 : 1200);
+
+  scheduleStartupTask("admob-initialize", async () => {
+    const initialized = await adMobService.initialize();
+    if (!initialized) {
+      return;
+    }
+    syncGameOverContinueUi(state.getSnapshot());
+    syncGameplayBannerVisibility(state.getSnapshot());
+  }, isIos ? 2200 : 700);
+}
+
+initStartupServicesSafely();
+
 if (classicPhotoBoardImageDataUrl) {
   void rebuildClassicPhotoBoardTiles(classicPhotoBoardImageDataUrl).then(() => {
     if (runtimeSettings.photoBoardEnabled === true && classicPhotoBoardReady) {
       ui.render(state.getSnapshot());
     }
+  }).catch((error) => {
+    console.warn("[startup] photo board rebuild failed.", error);
   });
 }
 
@@ -4236,18 +4357,18 @@ ui.bindControls({
     audio.playUiTap({ id: "gameover-continue" });
     const remaining = getRemainingRewardedContinues();
     if (remaining <= 0) {
-      ui.setGameOverActionNote("Daily continue limit reached (5/5).");
+      ui.setGameOverActionNote(t("daily_continue_limit"));
       syncGameOverContinueUi(state.getSnapshot());
       return;
     }
     const rewardResult = await adMobService.showRewarded();
     if (!rewardResult.shown) {
-      ui.setGameOverActionNote("Rewarded ad is not ready. Try again in a moment.");
+      ui.setGameOverActionNote(t("rewarded_not_ready"));
       syncGameOverContinueUi(state.getSnapshot());
       return;
     }
     if (!rewardResult.rewarded) {
-      ui.setGameOverActionNote("Reward was not completed.");
+      ui.setGameOverActionNote(t("rewarded_not_completed"));
       syncGameOverContinueUi(state.getSnapshot());
       return;
     }
@@ -4255,7 +4376,7 @@ ui.bindControls({
     ui.setGameOverActionNote("");
     const resumed = state.continueFromGameOverWithSingleDots();
     if (!resumed) {
-      ui.setGameOverActionNote("Continue unavailable on this board. Try again.");
+      ui.setGameOverActionNote(t("continue_unavailable"));
       syncGameOverContinueUi(state.getSnapshot());
       return;
     }
@@ -4456,6 +4577,7 @@ state.on("state", (snapshot) => {
   const previousStatus = layoutGuardStatus;
   layoutGuardStatus = snapshot.status;
   const enteredGameOver = snapshot.status === "over" && previousStatus !== "over";
+  const enteredLevelComplete = snapshot.status === "levelComplete" && previousStatus !== "levelComplete";
   if (snapshot.status !== "menu" && menuShopViewOpen) {
     closeMenuShopView();
   }
@@ -4464,8 +4586,14 @@ state.on("state", (snapshot) => {
   syncFxSuspension(snapshot);
   syncGameplayBannerVisibility(snapshot);
   syncGameOverContinueUi(snapshot);
-  if (enteredGameOver && !removeAdsUnlocked) {
-    void adMobService.showInterstitial();
+  if (enteredLevelComplete) {
+    playLevelCompleteSfxOnce();
+  }
+  if (enteredGameOver) {
+    playGameOverSfxOnce();
+    scheduleGameOverInterstitial();
+  } else if (snapshot.status !== "over") {
+    cancelPendingGameOverInterstitial();
   }
   if (previousStatus !== layoutGuardStatus) {
     const wasInteractive = isInteractiveLayoutStatus(previousStatus);
@@ -4784,12 +4912,12 @@ state.on("adventureCollected", (payload) => {
 });
 
 state.on("adventureLevelComplete", (payload) => {
-  audio.playLevelComplete();
-  ui.spawnFloatingText(`Level ${payload.level} Complete`, "combo");
+  playLevelCompleteSfxOnce();
+  ui.spawnFloatingText(t("level_complete_short", { level: payload.level }), "combo");
 });
 
 state.on("gameOver", (payload) => {
-  audio.playGameOver(payload);
+  playGameOverSfxOnce();
   haptics.gameOver();
   ui.playGameOverFeedback();
   mascotReaction?.play?.("sadDeep");
