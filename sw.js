@@ -1,4 +1,4 @@
-const CACHE_NAME = "luma-blocks-v6";
+const CACHE_NAME = "luma-blocks-v54-size-opt";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -19,11 +19,18 @@ const CORE_ASSETS = [
   "/src/analytics/telemetry.js",
   "/src/core/eventBus.js",
   "/src/core/random.js",
+  "/src/platform/adMobService.js",
+  "/src/platform/inAppReviewService.js",
+  "/src/platform/localNotificationService.js",
+  "/src/platform/playBillingService.js",
   "/assets/blocks/block-blue.png",
   "/assets/blocks/block-green.png",
   "/assets/blocks/block-orange.png",
   "/assets/blocks/block-pink.png",
   "/assets/blocks/block-purple.png",
+  "/assets/ui/revive-score-panel-asset.png",
+  "/assets/ui/revive-star-divider.svg",
+  "/assets/logo-menu-fast.webp",
   "/assets/icons/icon-180.png",
   "/assets/icons/icon-192.png",
   "/assets/icons/icon-512.png",
@@ -69,6 +76,24 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).catch(() => caches.match("/index.html"))
+    );
+    return;
+  }
+
+  if (
+    request.destination === "script" ||
+    request.destination === "style" ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css")
+  ) {
+    event.respondWith(
+      fetch(request).then((response) => {
+        if (response && response.status === 200 && response.type === "basic") {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+        }
+        return response;
+      }).catch(() => caches.match(request))
     );
     return;
   }

@@ -3,11 +3,13 @@ import { TUNING } from "./config/tuning.js";
 import { SoundManager } from "./feedback/audioHooks.js?v=20260425sfx1";
 import { Haptics } from "./feedback/haptics.js";
 import { GameStateManager } from "./game/gameStateManager.js";
-import { DragDropController } from "./input/dragDropController.js";
+import { PIECE_CATALOG } from "./game/pieceCatalog.js";
+import { DragDropController } from "./input/dragDropController.js?v=score-pulse-4";
 import { getAdventureLevelCount } from "./meta/adventureMode.js";
 import { evaluateAchievements } from "./meta/achievements.js";
 import { ProgressionManager } from "./meta/progressionManager.js";
 import { createAdMobService } from "./platform/adMobService.js";
+import { createInAppReviewService } from "./platform/inAppReviewService.js";
 import { createLocalNotificationService } from "./platform/localNotificationService.js";
 import { createPlayBillingService } from "./platform/playBillingService.js";
 import { mountJourneyScreenPartial } from "./ui/journey/journeyScreenPartial.js";
@@ -17,7 +19,12 @@ import {
   getPackLocalizedText,
   t,
 } from "./ui/localization.js";
-import { UIManager } from "./ui/uiManager.js?v=20260513lang1";
+import { UIManager } from "./ui/uiManager.js?v=logo-fast-1";
+import { resolveClearMessagePolicy } from "./ui/clearMessagePolicy.js";
+import {
+  getScoreThemeBand,
+  pickNextScoreTheme,
+} from "./ui/scoreThemeCycle.js";
 
 let layoutGuardRafId = 0;
 let layoutGuardStatus = "menu";
@@ -675,7 +682,8 @@ if ("serviceWorker" in navigator) {
       host === "127.0.0.1" ||
       host.startsWith("192.168.") ||
       host.startsWith("10.");
-    if (isLocal) {
+    const isLiveTestTunnel = host.endsWith(".trycloudflare.com");
+    if (isLocal || isLiveTestTunnel) {
       navigator.serviceWorker.getRegistrations()
         .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
         .catch(() => {});
@@ -694,6 +702,9 @@ const SHOP_DAILY_REWARD_LAST_CLAIM_KEY = "neon-grid-shop-daily-last-claim-v1";
 const SHOP_PACK_GRANTED_TOKENS_STORAGE_KEY = "neon-grid-shop-pack-granted-tokens-v1";
 const REWARDED_CONTINUE_USAGE_STORAGE_KEY = "neon-grid-rewarded-continue-usage-v1";
 const GAMEOVER_INTERSTITIAL_COUNTER_STORAGE_KEY = "neon-grid-gameover-interstitial-counter-v1";
+const RATE_US_PROMPT_STORAGE_KEY = "neon-grid-rate-us-prompt-v1";
+const ONBOARDING_DEMO_COMPLETE_STORAGE_KEY = "neon-grid-onboarding-demo-complete-v1";
+const ONBOARDING_SHOP_REWARD_PENDING_STORAGE_KEY = "neon-grid-onboarding-shop-reward-pending-v1";
 const LEADERBOARD_PROFILE_STORAGE_KEY = "neon-grid-leaderboard-profile-v1";
 const LEADERBOARD_PLAYER_ID_STORAGE_KEY = "neon-grid-leaderboard-player-id-v1";
 const LEADERBOARD_FIREBASE_CONFIG_STORAGE_KEY = "neon-grid-firebase-config-v1";
@@ -706,9 +717,15 @@ const SHOP_BILLING_PRODUCT_IDS = Object.freeze({
   big: "big_pack",
 });
 const REWARDED_CONTINUE_DAILY_LIMIT = 5;
-const INTERSTITIAL_EVERY_NTH_GAME_OVER = 2;
-const GAMEOVER_INTERSTITIAL_DELAY_MS = 420;
 const CRITICAL_SFX_MIN_GAP_MS = 900;
+const RATE_US_MIN_RUN_DURATION_MS = 45000;
+const RATE_US_MIN_TURNS = 8;
+const RATE_US_MIN_SCORE = 300;
+const ONBOARDING_BOARD_DEMO_ENABLED = false;
+const APP_VERSION_CODE = 19;
+const UPDATE_CONFIG_COLLECTION = "gridcrown_app_config";
+const UPDATE_CONFIG_DOCUMENT = "android";
+const DEFAULT_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.ozgur72.gridcrownblockblast";
 const ADMOB_USE_TEST_ADS = false;
 const ADMOB_ANDROID_APP_ID = ADMOB_USE_TEST_ADS
   ? "ca-app-pub-3940256099942544~3347511713"
@@ -764,6 +781,46 @@ const AUTO_OPEN_JOURNEY = (() => {
     return false;
   }
 })();
+const COMBO_TEST_PANEL_ENABLED = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return params.get("comboPanel") === "1" || params.get("panel") === "combo";
+  } catch {
+    return false;
+  }
+})();
+const AD_FLOW_TEST_PANEL_ENABLED = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return params.get("adPanel") === "1" || params.get("panel") === "ads";
+  } catch {
+    return false;
+  }
+})();
+const ONBOARDING_DEMO_PREVIEW = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return params.get("onboardingDemo") === "1" || params.get("demo") === "onboarding";
+  } catch {
+    return false;
+  }
+})();
+const RESET_ONBOARDING_DEMO = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return params.get("resetOnboarding") === "1";
+  } catch {
+    return false;
+  }
+})();
+const UPDATE_PROMPT_PREVIEW = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return params.get("updatePrompt") === "1" || params.get("previewUpdate") === "1";
+  } catch {
+    return false;
+  }
+})();
 const SCREENSHOT_JOURNEY_UNLOCK_LEVEL = 10;
 const ADMOB_ACTIVE_IDS = ADMOB_PLATFORM === "ios"
   ? {
@@ -785,6 +842,7 @@ const state = new GameStateManager(TUNING, { progression, telemetry });
 mountJourneyScreenPartial();
 detectAndApplyLocale();
 const ui = new UIManager(TUNING);
+ui.setBoardFrameFxDisabled(true);
 const audio = new SoundManager();
 void audio.prewarmForGameplay?.();
 const haptics = new Haptics();
@@ -1932,13 +1990,20 @@ async function ensureGridCrownSeedLeaderboard() {
       ]);
 
       const seedVersionNeedsRefresh = getStoredLeaderboardSeedVersion() !== LEADERBOARD_SEED_VERSION;
-      const shouldSeedGlobal = seedVersionNeedsRefresh || globalSnap.size < LEADERBOARD_SEED_COUNT;
+      const hasEnoughGlobalSeed = globalSnap.size >= LEADERBOARD_SEED_COUNT;
+      const hasEnoughWeeklySeed = weeklySnap.size >= LEADERBOARD_SEED_COUNT;
+      const shouldSeedGlobal = !hasEnoughGlobalSeed;
       const seedPlayers = buildGridCrownSeedPlayers(LEADERBOARD_SEED_COUNT);
+      if (hasEnoughGlobalSeed && hasEnoughWeeklySeed) {
+        setStoredLeaderboardSeedVersion(LEADERBOARD_SEED_VERSION);
+        leaderboardFirebaseRuntime.seedReady = true;
+        return;
+      }
       if (shouldSeedGlobal) {
         await writeSeedEntriesToCollection(LEADERBOARD_COLLECTIONS.global, seedPlayers, "globalScore");
       }
       await ensureWeeklyRotation(shouldSeedGlobal ? null : globalSnap, weeklySnap, seedPlayers, {
-        force: seedVersionNeedsRefresh,
+        force: seedVersionNeedsRefresh && !hasEnoughWeeklySeed,
       });
       setStoredLeaderboardSeedVersion(LEADERBOARD_SEED_VERSION);
       leaderboardFirebaseRuntime.seedReady = true;
@@ -2061,6 +2126,90 @@ async function initLeaderboardFirebase() {
   })();
 
   return leaderboardFirebaseRuntime.initPromise;
+}
+
+let softUpdatePromptChecked = false;
+
+function closeSoftUpdatePrompt() {
+  const modal = document.getElementById("soft-update-modal");
+  modal?.setAttribute("aria-hidden", "true");
+}
+
+function openSoftUpdatePrompt({ updateUrl = DEFAULT_PLAY_STORE_URL, title = "", message = "" } = {}) {
+  const modal = document.getElementById("soft-update-modal");
+  const openButton = document.getElementById("soft-update-open-btn");
+  const titleElement = document.getElementById("soft-update-title");
+  const messageElement = document.getElementById("soft-update-message");
+  if (!(modal instanceof HTMLElement) || !(openButton instanceof HTMLAnchorElement)) {
+    return false;
+  }
+  let safeUrl = DEFAULT_PLAY_STORE_URL;
+  try {
+    const candidate = new URL(String(updateUrl || DEFAULT_PLAY_STORE_URL));
+    if (candidate.protocol === "https:" && candidate.hostname === "play.google.com") {
+      safeUrl = candidate.href;
+    }
+  } catch {
+    safeUrl = DEFAULT_PLAY_STORE_URL;
+  }
+  openButton.href = safeUrl;
+  if (title && titleElement) {
+    titleElement.textContent = String(title).slice(0, 80);
+  }
+  if (message && messageElement) {
+    messageElement.textContent = String(message).slice(0, 240);
+  }
+  modal.setAttribute("aria-hidden", "false");
+  return true;
+}
+
+function mountSoftUpdatePromptControls() {
+  const laterButton = document.getElementById("soft-update-later-btn");
+  laterButton?.addEventListener("click", closeSoftUpdatePrompt);
+}
+
+async function checkForSoftUpdatePrompt() {
+  if (softUpdatePromptChecked) {
+    return false;
+  }
+  softUpdatePromptChecked = true;
+  if (UPDATE_PROMPT_PREVIEW) {
+    return openSoftUpdatePrompt();
+  }
+  try {
+    const firebaseReady = await Promise.race([
+      initLeaderboardFirebase(),
+      new Promise((resolve) => window.setTimeout(() => resolve(false), 4500)),
+    ]);
+    if (!firebaseReady || !leaderboardFirebaseRuntime.db || !leaderboardFirebaseRuntime.api) {
+      return false;
+    }
+    const { doc, getDoc } = leaderboardFirebaseRuntime.api;
+    const configRef = doc(
+      leaderboardFirebaseRuntime.db,
+      UPDATE_CONFIG_COLLECTION,
+      UPDATE_CONFIG_DOCUMENT,
+    );
+    const configSnapshot = await getDoc(configRef);
+    if (!configSnapshot.exists()) {
+      return false;
+    }
+    const config = configSnapshot.data() || {};
+    const enabled = config.enabled !== false;
+    const latestVersionCode = Math.max(0, Math.floor(Number(config.latestVersionCode) || 0));
+    const forcePrompt = config.forcePrompt === true;
+    if (!enabled || (!forcePrompt && latestVersionCode <= APP_VERSION_CODE)) {
+      return false;
+    }
+    return openSoftUpdatePrompt({
+      updateUrl: config.updateUrl,
+      title: config.title,
+      message: config.message,
+    });
+  } catch (error) {
+    console.warn("[update] version check failed; continuing normally.", error);
+    return false;
+  }
 }
 
 function computeWeeklyPlayerScore(snapshot, bestScore) {
@@ -2606,6 +2755,45 @@ function saveRewardedContinueUsage(usage) {
   }
 }
 
+function loadRateUsPromptState() {
+  const fallback = {
+    attempted: false,
+    lastAttemptDayKey: "",
+    eligibleSeen: false,
+  };
+  try {
+    const raw = localStorage.getItem(RATE_US_PROMPT_STORAGE_KEY);
+    if (!raw) {
+      return fallback;
+    }
+    const parsed = JSON.parse(raw);
+    return {
+      attempted: Boolean(parsed?.attempted),
+      lastAttemptDayKey: typeof parsed?.lastAttemptDayKey === "string" ? parsed.lastAttemptDayKey : "",
+      eligibleSeen: Boolean(parsed?.eligibleSeen),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function saveRateUsPromptState(promptState) {
+  try {
+    localStorage.setItem(
+      RATE_US_PROMPT_STORAGE_KEY,
+      JSON.stringify({
+        attempted: Boolean(promptState?.attempted),
+        lastAttemptDayKey: typeof promptState?.lastAttemptDayKey === "string"
+          ? promptState.lastAttemptDayKey
+          : "",
+        eligibleSeen: Boolean(promptState?.eligibleSeen),
+      }),
+    );
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
 function loadGameOverInterstitialCounter() {
   try {
     const raw = localStorage.getItem(GAMEOVER_INTERSTITIAL_COUNTER_STORAGE_KEY);
@@ -2768,6 +2956,7 @@ let leaderboardProfile = loadLeaderboardProfile();
 let shopDailyLastClaimAtMs = loadShopDailyLastClaimAtMs();
 let rewardedContinueUsage = loadRewardedContinueUsage();
 let gameOverInterstitialCounter = loadGameOverInterstitialCounter();
+let rateUsPromptState = loadRateUsPromptState();
 let shopCountdownIntervalId = 0;
 let menuShopViewOpen = false;
 let menuShopPackIndex = 0;
@@ -2784,7 +2973,12 @@ let achievementUnlockTracker = null;
 let mascotReaction = null;
 let audioPreloadRequested = false;
 let audioInteractionPrimed = false;
-let pendingGameOverInterstitialTimerId = 0;
+let gameOverInterstitialHandled = false;
+let gameOverInterstitialPromise = null;
+let gameOverInterstitialInFlight = false;
+let gameOverExitInFlight = false;
+let adFlowTestInterstitialResult = "no-fill";
+let adFlowTestRewardedResult = "no-fill";
 let lastGameOverSfxAtMs = -Infinity;
 let lastLevelCompleteSfxAtMs = -Infinity;
 const settingsPhotoPickerInput = document.getElementById("settings-photo-picker");
@@ -2797,9 +2991,10 @@ const adMobService = createAdMobService({
   bannerAdId: ADMOB_ACTIVE_IDS.bannerAdId,
   interstitialAdId: ADMOB_ACTIVE_IDS.interstitialAdId,
   rewardedAdId: ADMOB_ACTIVE_IDS.rewardedAdId,
-  interstitialCooldownMs: 1500,
+  interstitialCooldownMs: 0,
   testing: ADMOB_USE_TEST_ADS,
 });
+const inAppReviewService = createInAppReviewService();
 const playBillingService = createPlayBillingService({
   productId: REMOVE_ADS_PRODUCT_ID,
 });
@@ -2827,6 +3022,7 @@ if (!classicPhotoBoardImageDataUrl && runtimeSettings.photoBoardEnabled === true
 }
 ui.setMenuBadgesUiVariant(BADGES_UI_VARIANT);
 applyStaticTranslations();
+mountSoftUpdatePromptControls();
 audio.setEnabled(runtimeSettings.soundEnabled);
 haptics.setEnabled(runtimeSettings.hapticsEnabled);
 audio.setRelaxingMode(runtimeSettings.relaxingModeEnabled);
@@ -2968,9 +3164,9 @@ function syncGameOverContinueUi(snapshot = state.getSnapshot()) {
   const label = button.querySelector(".gameover-continue-text");
   const subLabel = button.querySelector(".gameover-continue-subtext");
   const isGameOver = snapshot?.status === "over";
-  const adReadyFlow = adMobService.isConfigured() && adMobService.isSupported();
+  const adReadyFlow = AD_FLOW_TEST_PANEL_ENABLED || (adMobService.isConfigured() && adMobService.isSupported());
   const remaining = getRemainingRewardedContinues();
-  const enabled = isGameOver && adReadyFlow && remaining > 0;
+  const enabled = isGameOver && adReadyFlow && remaining > 0 && !gameOverInterstitialInFlight && !gameOverExitInFlight;
 
   button.disabled = !enabled;
   button.setAttribute("aria-disabled", enabled ? "false" : "true");
@@ -2982,6 +3178,18 @@ function syncGameOverContinueUi(snapshot = state.getSnapshot()) {
       ? t("rewarded_today", { count: remaining, limit: REWARDED_CONTINUE_DAILY_LIMIT })
       : t("native_android_only");
   }
+}
+
+function syncGameOverActionAvailability(snapshot = state.getSnapshot()) {
+  const blocked = snapshot?.status === "over" && (gameOverInterstitialInFlight || gameOverExitInFlight);
+  for (const id of ["restart-gameover-btn", "gameover-home-btn"]) {
+    const button = document.getElementById(id);
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = blocked;
+      button.setAttribute("aria-disabled", blocked ? "true" : "false");
+    }
+  }
+  syncGameOverContinueUi(snapshot);
 }
 
 function playGameOverSfxOnce() {
@@ -3004,36 +3212,599 @@ function playLevelCompleteSfxOnce() {
   return true;
 }
 
-function cancelPendingGameOverInterstitial() {
-  if (!pendingGameOverInterstitialTimerId) {
-    return;
+function isRateUsEligibleSnapshot(snapshot) {
+  if (!snapshot || snapshot.status !== "over") {
+    return false;
   }
-  window.clearTimeout(pendingGameOverInterstitialTimerId);
-  pendingGameOverInterstitialTimerId = 0;
+  if (rateUsPromptState.attempted) {
+    return false;
+  }
+  if (!inAppReviewService.isSupported()) {
+    return false;
+  }
+  const durationMs = Math.max(0, Number(snapshot.runDurationMs) || 0);
+  const turns = Math.max(0, Math.floor(Number(snapshot.turn) || 0));
+  const score = Math.max(0, Math.floor(Number(snapshot.score) || 0));
+  const linesCleared = Math.max(0, Math.floor(Number(snapshot.linesClearedTotal) || 0));
+  if (durationMs < RATE_US_MIN_RUN_DURATION_MS) {
+    return false;
+  }
+  if (turns < RATE_US_MIN_TURNS) {
+    return false;
+  }
+  return score >= RATE_US_MIN_SCORE || linesCleared > 0;
 }
 
-function scheduleGameOverInterstitial() {
+async function maybeRequestRateUsAfterGameOver(snapshot, { source = "gameover" } = {}) {
+  if (!isRateUsEligibleSnapshot(snapshot)) {
+    return false;
+  }
+  rateUsPromptState = {
+    attempted: true,
+    lastAttemptDayKey: getLocalDayKey(),
+    eligibleSeen: true,
+  };
+  saveRateUsPromptState(rateUsPromptState);
+  const result = await inAppReviewService.requestReview({ source });
+  return Boolean(result?.attempted);
+}
+
+function recordGameOverForInterstitialCycle() {
   if (removeAdsUnlocked) {
     return;
   }
   gameOverInterstitialCounter = Math.max(0, gameOverInterstitialCounter + 1);
   saveGameOverInterstitialCounter(gameOverInterstitialCounter);
-  if (INTERSTITIAL_EVERY_NTH_GAME_OVER > 1) {
-    const shouldShow = (gameOverInterstitialCounter % INTERSTITIAL_EVERY_NTH_GAME_OVER) === 0;
-    if (!shouldShow) {
-      return;
+}
+
+function shouldShowGameOverInterstitial() {
+  return !removeAdsUnlocked && !gameOverInterstitialHandled;
+}
+
+function waitForMs(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, Math.max(0, Math.floor(Number(ms) || 0)));
+  });
+}
+
+async function showGameOverInterstitialNow() {
+  if (removeAdsUnlocked) {
+    return false;
+  }
+  if (AD_FLOW_TEST_PANEL_ENABLED) {
+    await waitForMs(500);
+    return adFlowTestInterstitialResult === "success";
+  }
+  return adMobService.showInterstitial();
+}
+
+async function ensureGameOverInterstitial({ source = "gameover" } = {}) {
+  if (!shouldShowGameOverInterstitial()) {
+    return false;
+  }
+  if (gameOverInterstitialPromise) {
+    return gameOverInterstitialPromise;
+  }
+  gameOverInterstitialHandled = true;
+  gameOverInterstitialInFlight = true;
+  ui.setGameOverActionNote(AD_FLOW_TEST_PANEL_ENABLED ? "Interstitial simulation..." : "");
+  syncGameOverActionAvailability(state.getSnapshot());
+  gameOverInterstitialPromise = (async () => {
+    const shown = await showGameOverInterstitialNow();
+    if (shown) {
+      console.info(`[ads] game-over interstitial shown: ${source}`);
     }
+    return shown;
+  })().finally(() => {
+    gameOverInterstitialInFlight = false;
+    gameOverInterstitialPromise = null;
+    ui.setGameOverActionNote("");
+    syncGameOverActionAvailability(state.getSnapshot());
+  });
+  return gameOverInterstitialPromise;
+}
+
+async function runGameOverExitAction(action) {
+  if (gameOverExitInFlight) {
+    return false;
+  }
+  gameOverExitInFlight = true;
+  syncGameOverActionAvailability(state.getSnapshot());
+  try {
+    if (typeof action === "function") {
+      action();
+    }
+    return true;
+  } finally {
+    gameOverExitInFlight = false;
+    syncGameOverActionAvailability(state.getSnapshot());
+  }
+}
+
+async function showRewardedContinueAd() {
+  if (AD_FLOW_TEST_PANEL_ENABLED) {
+    await waitForMs(350);
+    return adFlowTestRewardedResult === "success"
+      ? { shown: true, rewarded: true }
+      : { shown: false, rewarded: false };
+  }
+  return adMobService.showRewarded();
+}
+
+function hasCompletedOnboardingDemo() {
+  try {
+    return localStorage.getItem(ONBOARDING_DEMO_COMPLETE_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function hasExistingPlayerProgressForOnboarding() {
+  try {
+    const bestScore = Number(localStorage.getItem(TUNING.STORAGE_KEY_BEST_SCORE) || 0);
+    if (Number.isFinite(bestScore) && bestScore > 0) {
+      return true;
+    }
+  } catch {
+    // Continue with progression check.
   }
 
-  cancelPendingGameOverInterstitial();
-  pendingGameOverInterstitialTimerId = window.setTimeout(async () => {
-    pendingGameOverInterstitialTimerId = 0;
-    const latest = state.getSnapshot();
-    if (!latest || latest.status !== "over" || removeAdsUnlocked) {
-      return;
+  try {
+    const raw = localStorage.getItem(TUNING.STORAGE_KEY_PROGRESS);
+    if (!raw) {
+      return false;
     }
-    await adMobService.showInterstitial();
-  }, GAMEOVER_INTERSTITIAL_DELAY_MS);
+    const progress = JSON.parse(raw);
+    return (
+      Math.max(0, Math.floor(Number(progress?.runsPlayed) || 0)) > 0 ||
+      Math.max(0, Math.floor(Number(progress?.totalLinesCleared) || 0)) > 0 ||
+      Math.max(0, Math.floor(Number(progress?.adventureCurrentLevel) || 1)) > 1 ||
+      (Array.isArray(progress?.weeklyTop) && progress.weeklyTop.length > 0)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function setOnboardingDemoCompleted(value = true) {
+  try {
+    if (value) {
+      localStorage.setItem(ONBOARDING_DEMO_COMPLETE_STORAGE_KEY, "1");
+    } else {
+      localStorage.removeItem(ONBOARDING_DEMO_COMPLETE_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage errors in restricted contexts.
+  }
+}
+
+function hasPendingOnboardingShopReward() {
+  try {
+    return localStorage.getItem(ONBOARDING_SHOP_REWARD_PENDING_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setPendingOnboardingShopReward(value = true) {
+  try {
+    if (value) {
+      localStorage.setItem(ONBOARDING_SHOP_REWARD_PENDING_STORAGE_KEY, "1");
+    } else {
+      localStorage.removeItem(ONBOARDING_SHOP_REWARD_PENDING_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage errors in restricted contexts.
+  }
+}
+
+function shouldStartOnboardingShopRewardGuide() {
+  if (SCREENSHOT_MODE || AUTO_OPEN_JOURNEY) {
+    return false;
+  }
+  if (ONBOARDING_DEMO_PREVIEW || RESET_ONBOARDING_DEMO) {
+    setOnboardingDemoCompleted(true);
+    setPendingOnboardingShopReward(true);
+    shopDailyLastClaimAtMs = 0;
+    saveShopDailyLastClaimAtMs(shopDailyLastClaimAtMs);
+    return true;
+  }
+  if (hasExistingPlayerProgressForOnboarding()) {
+    setOnboardingDemoCompleted(true);
+    return hasPendingOnboardingShopReward();
+  }
+  if (!hasCompletedOnboardingDemo()) {
+    setOnboardingDemoCompleted(true);
+    setPendingOnboardingShopReward(true);
+  }
+  return hasPendingOnboardingShopReward();
+}
+
+function cloneCatalogPieceForDemo(id, tone) {
+  const template = PIECE_CATALOG.find((piece) => piece.id === id);
+  if (!template) {
+    return null;
+  }
+  return {
+    ...template,
+    tone,
+    cells: template.cells.map((cell) => ({ ...cell })),
+  };
+}
+
+function createDemoBoard(fillTone = 0) {
+  return Array.from({ length: TUNING.BOARD_SIZE }, () =>
+    Array.from({ length: TUNING.BOARD_SIZE }, () => fillTone));
+}
+
+function setDemoCells(board, cells, tone) {
+  cells.forEach(([row, col, cellTone]) => {
+    if (
+      row >= 0 &&
+      row < TUNING.BOARD_SIZE &&
+      col >= 0 &&
+      col < TUNING.BOARD_SIZE
+    ) {
+      board[row][col] = Math.max(0, Math.floor(Number(cellTone ?? tone) || 0));
+    }
+  });
+}
+
+function getDemoPieceCellsAt(piece, row, col) {
+  return (piece?.cells ?? []).map((cell) => ({
+    row: row + cell.y,
+    col: col + cell.x,
+  }));
+}
+
+function buildOnboardingDemoStages() {
+  const line4 = cloneCatalogPieceForDemo("line4_h", 4);
+  const square = cloneCatalogPieceForDemo("square2", 3);
+  const dot = cloneCatalogPieceForDemo("dot", 2);
+  if (!line4 || !square || !dot) {
+    return null;
+  }
+
+  const introBoard = createDemoBoard(0);
+  const introPlusCells = [];
+  for (let index = 0; index < TUNING.BOARD_SIZE; index += 1) {
+    introPlusCells.push([3, index, 5], [4, index, 5], [index, 3, 5], [index, 4, 5]);
+  }
+  setDemoCells(introBoard, introPlusCells, 5);
+  setDemoCells(introBoard, [
+    [3, 3], [3, 4],
+    [4, 3], [4, 4],
+  ], 0);
+
+  const plusBoard = createDemoBoard(0);
+  const plusCells = [];
+  for (let index = 0; index < TUNING.BOARD_SIZE; index += 1) {
+    if (index !== 3) {
+      plusCells.push([3, index, index % 2 === 0 ? 5 : 4]);
+      plusCells.push([index, 3, index % 2 === 0 ? 4 : 5]);
+    }
+  }
+  setDemoCells(plusBoard, plusCells, 5);
+
+  const finalBoard = createDemoBoard(0);
+  setDemoCells(finalBoard, [
+    [0, 0, 5], [0, 1, 5], [0, 6, 5], [0, 7, 5],
+    [1, 0, 5], [1, 2, 4], [1, 5, 3], [1, 7, 5],
+    [2, 1, 3], [2, 2, 3], [2, 5, 2], [2, 6, 2],
+    [3, 0, 5], [3, 3, 1], [3, 4, 1], [3, 7, 5],
+    [4, 0, 5], [4, 1, 2], [4, 6, 3], [4, 7, 5],
+    [5, 2, 5], [5, 3, 3], [5, 4, 2], [5, 5, 4],
+    [6, 0, 1], [6, 1, 1], [6, 6, 4], [6, 7, 4],
+    [7, 0, 5], [7, 3, 3], [7, 4, 3], [7, 7, 5],
+  ], 5);
+
+  return {
+    pieces: [line4, square, dot],
+    stages: [
+      {
+        board: introBoard,
+        slotIndex: 1,
+        target: { row: 3, col: 3 },
+        piece: square,
+      },
+      {
+        board: plusBoard,
+        slotIndex: 2,
+        target: { row: 3, col: 3 },
+        piece: dot,
+      },
+      {
+        board: finalBoard,
+        slotIndex: 0,
+        target: { row: 6, col: 2 },
+        piece: line4,
+      },
+    ],
+  };
+}
+
+const onboardingDemoRuntime = {
+  active: false,
+  stageIndex: 0,
+  data: null,
+  handEl: null,
+  syncTimer: 0,
+  advanceTimer: 0,
+};
+
+const onboardingShopGuideRuntime = {
+  active: false,
+  step: "",
+  handEl: null,
+  syncTimer: 0,
+};
+
+function clearOnboardingDemoGuide() {
+  document.querySelectorAll(".cell--onboarding-target").forEach((cell) => {
+    cell.classList.remove("cell--onboarding-target");
+  });
+  if (onboardingDemoRuntime.syncTimer) {
+    window.clearInterval(onboardingDemoRuntime.syncTimer);
+    onboardingDemoRuntime.syncTimer = 0;
+  }
+  onboardingDemoRuntime.handEl?.remove();
+  onboardingDemoRuntime.handEl = null;
+}
+
+function clearOnboardingShopGuide() {
+  document.querySelectorAll(".onboarding-shop-guide-target").forEach((node) => {
+    node.classList.remove("onboarding-shop-guide-target");
+  });
+  if (onboardingShopGuideRuntime.syncTimer) {
+    window.clearInterval(onboardingShopGuideRuntime.syncTimer);
+    onboardingShopGuideRuntime.syncTimer = 0;
+  }
+  onboardingShopGuideRuntime.handEl?.remove();
+  onboardingShopGuideRuntime.handEl = null;
+}
+
+function syncOnboardingShopGuidePosition() {
+  const runtime = onboardingShopGuideRuntime;
+  if (!runtime.active || !(runtime.handEl instanceof HTMLElement)) {
+    return;
+  }
+  const targetSelector = runtime.step === "claim"
+    ? "#menu-shop-daily-claim-btn:not([hidden])"
+    : "#menu-shop-open-btn";
+  const target = document.querySelector(targetSelector);
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+  const rect = target.getBoundingClientRect();
+  if (!rect.width || !rect.height) {
+    return;
+  }
+  const fromX = Math.min(window.innerWidth - 44, Math.max(44, window.innerWidth * 0.52));
+  const fromY = runtime.step === "claim"
+    ? Math.min(window.innerHeight - 62, rect.bottom + 72)
+    : Math.min(window.innerHeight - 62, window.innerHeight * 0.68);
+  const toX = rect.left + (rect.width * 0.5);
+  const toY = rect.top + (rect.height * 0.55);
+  runtime.handEl.style.setProperty("--guide-from-x", `${fromX.toFixed(1)}px`);
+  runtime.handEl.style.setProperty("--guide-from-y", `${fromY.toFixed(1)}px`);
+  runtime.handEl.style.setProperty("--guide-to-x", `${toX.toFixed(1)}px`);
+  runtime.handEl.style.setProperty("--guide-to-y", `${toY.toFixed(1)}px`);
+}
+
+function showOnboardingShopGuide(step = "shop") {
+  const runtime = onboardingShopGuideRuntime;
+  clearOnboardingShopGuide();
+  if (!runtime.active) {
+    return;
+  }
+  runtime.step = step;
+  const targetSelector = step === "claim"
+    ? "#menu-shop-daily-claim-btn:not([hidden])"
+    : "#menu-shop-open-btn";
+  const target = document.querySelector(targetSelector);
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+  target.classList.add("onboarding-shop-guide-target");
+  const hand = document.createElement("div");
+  hand.className = `onboarding-demo-guide onboarding-shop-guide onboarding-shop-guide--${step}`;
+  hand.setAttribute("aria-hidden", "true");
+  hand.innerHTML = '<span class="onboarding-demo-guide__hand">👆</span>';
+  document.body.appendChild(hand);
+  runtime.handEl = hand;
+  syncOnboardingShopGuidePosition();
+  runtime.syncTimer = window.setInterval(syncOnboardingShopGuidePosition, 500);
+}
+
+function startOnboardingShopRewardGuide({ openShop = false } = {}) {
+  if (!hasPendingOnboardingShopReward() || !isShopDailyReady()) {
+    setPendingOnboardingShopReward(false);
+    return;
+  }
+  onboardingShopGuideRuntime.active = true;
+  if (state.getSnapshot().status !== "menu") {
+    state.goToMenu();
+  }
+  if (openShop) {
+    openMenuShopView();
+    window.setTimeout(() => showOnboardingShopGuide("claim"), 180);
+    return;
+  }
+  window.setTimeout(() => showOnboardingShopGuide("shop"), 180);
+}
+
+function finishOnboardingShopRewardGuide() {
+  onboardingShopGuideRuntime.active = false;
+  setPendingOnboardingShopReward(false);
+  clearOnboardingShopGuide();
+}
+
+function syncOnboardingDemoGuidePosition() {
+  const runtime = onboardingDemoRuntime;
+  if (!runtime.active || !runtime.data || !(runtime.handEl instanceof HTMLElement)) {
+    return;
+  }
+  const stage = runtime.data.stages[runtime.stageIndex];
+  if (!stage) {
+    return;
+  }
+  const card = ui.elements.pieceTray?.querySelector?.(`.piece-card[data-slot="${stage.slotIndex}"]`);
+  const board = ui.elements.board;
+  if (!(card instanceof HTMLElement) || !(board instanceof HTMLElement)) {
+    return;
+  }
+  const cardRect = card.getBoundingClientRect();
+  const boardRect = board.getBoundingClientRect();
+  if (!cardRect.width || !boardRect.width) {
+    return;
+  }
+  const cellSize = boardRect.width / TUNING.BOARD_SIZE;
+  const pieceWidth = Math.max(1, Number(stage.piece?.width) || 1);
+  const pieceHeight = Math.max(1, Number(stage.piece?.height) || 1);
+  const fromX = cardRect.left + (cardRect.width * 0.5);
+  const fromY = cardRect.top + (cardRect.height * 0.5);
+  const toX = boardRect.left + ((stage.target.col + (pieceWidth * 0.5)) * cellSize);
+  const toY = boardRect.top + ((stage.target.row + (pieceHeight * 0.5)) * cellSize);
+  runtime.handEl.style.setProperty("--guide-from-x", `${fromX.toFixed(1)}px`);
+  runtime.handEl.style.setProperty("--guide-from-y", `${fromY.toFixed(1)}px`);
+  runtime.handEl.style.setProperty("--guide-to-x", `${toX.toFixed(1)}px`);
+  runtime.handEl.style.setProperty("--guide-to-y", `${toY.toFixed(1)}px`);
+}
+
+function showOnboardingDemoGuide() {
+  const runtime = onboardingDemoRuntime;
+  clearOnboardingDemoGuide();
+  if (!runtime.active || !runtime.data) {
+    return;
+  }
+  const stage = runtime.data.stages[runtime.stageIndex];
+  if (!stage) {
+    return;
+  }
+
+  getDemoPieceCellsAt(stage.piece, stage.target.row, stage.target.col).forEach(({ row, col }) => {
+    const cell = ui.cells?.get?.(`${row}:${col}`);
+    cell?.classList.add("cell--onboarding-target");
+  });
+
+  const hand = document.createElement("div");
+  hand.className = "onboarding-demo-guide";
+  hand.setAttribute("aria-hidden", "true");
+  hand.innerHTML = '<span class="onboarding-demo-guide__hand">👆</span>';
+  document.body.appendChild(hand);
+  runtime.handEl = hand;
+  syncOnboardingDemoGuidePosition();
+  runtime.syncTimer = window.setInterval(syncOnboardingDemoGuidePosition, 500);
+}
+
+function placedCellsMatchDemoTarget(stage, placedCells) {
+  const expected = getDemoPieceCellsAt(stage.piece, stage.target.row, stage.target.col)
+    .map((cell) => `${cell.row}:${cell.col}`)
+    .sort()
+    .join("|");
+  const actual = (placedCells ?? [])
+    .map((cell) => `${cell.row}:${cell.col}`)
+    .sort()
+    .join("|");
+  return expected === actual;
+}
+
+function resetCurrentOnboardingDemoStage() {
+  const runtime = onboardingDemoRuntime;
+  const stage = runtime.data?.stages?.[runtime.stageIndex];
+  if (!runtime.active || !stage) {
+    return;
+  }
+  state.applyScriptedBoard(stage.board, {
+    status: "playing",
+    pieces: getOnboardingDemoPiecesForStage(runtime.stageIndex),
+  });
+  window.setTimeout(showOnboardingDemoGuide, 80);
+}
+
+function getOnboardingDemoPiecesForStage(stageIndex) {
+  const runtime = onboardingDemoRuntime;
+  const pieces = runtime.data?.pieces ?? [];
+  const completedSlots = new Set(
+    (runtime.data?.stages ?? [])
+      .slice(0, Math.max(0, stageIndex))
+      .map((stage) => stage.slotIndex),
+  );
+  return pieces.map((piece, slotIndex) => (completedSlots.has(slotIndex) ? null : piece));
+}
+
+function advanceOnboardingDemoStage() {
+  const runtime = onboardingDemoRuntime;
+  if (!runtime.active || !runtime.data) {
+    return;
+  }
+  runtime.stageIndex += 1;
+  const nextStage = runtime.data.stages[runtime.stageIndex];
+  if (!nextStage) {
+    runtime.active = false;
+    clearOnboardingDemoGuide();
+    setOnboardingDemoCompleted(true);
+    setPendingOnboardingShopReward(true);
+    window.setTimeout(() => {
+      ui.spawnFloatingText?.("Ready!", "combo");
+    }, 260);
+    window.setTimeout(() => {
+      audio.resetComboVoiceFlow();
+      smartPraiseState.lastTurn = -99;
+      smartPraiseState.lastAtMs = 0;
+      approvalState.lastTurn = -99;
+      approvalState.lastAtMs = 0;
+      state.goToMenu();
+      startOnboardingShopRewardGuide();
+    }, 1250);
+    return;
+  }
+  state.applyScriptedBoard(nextStage.board, {
+    status: "playing",
+    pieces: getOnboardingDemoPiecesForStage(runtime.stageIndex),
+  });
+  window.setTimeout(showOnboardingDemoGuide, 140);
+}
+
+function startOnboardingDemoPreview() {
+  if (!ONBOARDING_BOARD_DEMO_ENABLED) {
+    setOnboardingDemoCompleted(true);
+    setPendingOnboardingShopReward(true);
+    startOnboardingShopRewardGuide();
+    return;
+  }
+  if (RESET_ONBOARDING_DEMO) {
+    setOnboardingDemoCompleted(false);
+  }
+  const data = buildOnboardingDemoStages();
+  if (!data) {
+    return;
+  }
+  onboardingDemoRuntime.active = true;
+  onboardingDemoRuntime.stageIndex = 0;
+  onboardingDemoRuntime.data = data;
+  if (onboardingDemoRuntime.advanceTimer) {
+    window.clearTimeout(onboardingDemoRuntime.advanceTimer);
+    onboardingDemoRuntime.advanceTimer = 0;
+  }
+  audio.resetComboVoiceFlow();
+  smartPraiseState.lastTurn = -99;
+  smartPraiseState.lastAtMs = 0;
+  approvalState.lastTurn = -99;
+  approvalState.lastAtMs = 0;
+  if (ONBOARDING_DEMO_PREVIEW) {
+    state.resetBestScore(0);
+    shopDailyLastClaimAtMs = 0;
+    saveShopDailyLastClaimAtMs(shopDailyLastClaimAtMs);
+  }
+  state.startScriptedRun({
+    mode: "classic",
+    board: data.stages[0].board,
+    pieces: data.pieces,
+    score: 332486,
+    suppressBestScoreUpdates: true,
+  });
+  window.setTimeout(showOnboardingDemoGuide, 180);
 }
 
 function getRemoveAdsModalElements() {
@@ -3091,33 +3862,26 @@ function syncGameplayBannerVisibility(snapshot = state.getSnapshot()) {
   const bannerSlot = document.querySelector(".ad-banner-slot");
   const nextVisible = shouldShowGameplayBanner(snapshot);
   const forceHide = removeAdsUnlocked === true;
-  const shouldRenderBanner = !forceHide && nextVisible;
+  const canUseNativeBanner = adMobService.isConfigured() && adMobService.isSupported();
+  const shouldRenderBanner = !forceHide && nextVisible && canUseNativeBanner;
   root?.classList.toggle("ads-disabled", removeAdsUnlocked);
   body?.classList.toggle("ads-disabled", removeAdsUnlocked);
   shell?.classList.toggle("ads-disabled", removeAdsUnlocked);
   shell?.classList.toggle("has-banner", shouldRenderBanner);
   if (shell) {
-    if (forceHide) {
+    if (forceHide || !canUseNativeBanner) {
       shell.style.setProperty("--ad-slot-height", "0px");
     } else {
       shell.style.removeProperty("--ad-slot-height");
     }
   }
   if (bannerSlot instanceof HTMLElement) {
-    bannerSlot.classList.toggle("is-visible", shouldRenderBanner);
-    bannerSlot.setAttribute("aria-hidden", shouldRenderBanner ? "false" : "true");
-    if (forceHide) {
-      bannerSlot.classList.remove("is-visible");
-      bannerSlot.style.display = "none";
-      bannerSlot.style.height = "0px";
-      bannerSlot.style.opacity = "0";
-      bannerSlot.style.visibility = "hidden";
-    } else {
-      bannerSlot.style.display = "";
-      bannerSlot.style.height = "";
-      bannerSlot.style.opacity = "";
-      bannerSlot.style.visibility = "";
-    }
+    bannerSlot.classList.remove("is-visible");
+    bannerSlot.setAttribute("aria-hidden", "true");
+    bannerSlot.style.display = "none";
+    bannerSlot.style.height = "0px";
+    bannerSlot.style.opacity = "0";
+    bannerSlot.style.visibility = "hidden";
   }
   if (gameplayBannerVisible !== shouldRenderBanner) {
     gameplayBannerVisible = shouldRenderBanner;
@@ -3891,6 +4655,32 @@ function applyVisualMode(mode) {
   document.documentElement.setAttribute("data-visual-mode", safeMode);
 }
 
+let scoreThemeBand = 0;
+
+function syncScoreTheme(snapshot) {
+  if (!snapshot || snapshot.status === "menu") {
+    scoreThemeBand = 0;
+    return;
+  }
+  const score = Math.max(0, Math.floor(Number(snapshot.score) || 0));
+  const turn = Math.max(0, Math.floor(Number(snapshot.turn) || 0));
+  if (snapshot.status === "playing" && score === 0 && turn === 0) {
+    scoreThemeBand = 0;
+    applyVisualMode("royal");
+    return;
+  }
+
+  const targetBand = getScoreThemeBand(score);
+  if (targetBand < scoreThemeBand) {
+    scoreThemeBand = 0;
+    applyVisualMode("royal");
+  }
+  while (scoreThemeBand < targetBand) {
+    applyVisualMode(pickNextScoreTheme(runtimeSettings.visualMode));
+    scoreThemeBand += 1;
+  }
+}
+
 function restartCurrentRun() {
   pendingMilestoneUnlock = null;
   audio.resetComboVoiceFlow();
@@ -3987,6 +4777,9 @@ function initStartupServicesSafely() {
 }
 
 initStartupServicesSafely();
+window.setTimeout(() => {
+  void checkForSoftUpdatePrompt();
+}, 1200);
 
 if (classicPhotoBoardImageDataUrl) {
   void rebuildClassicPhotoBoardTiles(classicPhotoBoardImageDataUrl).then(() => {
@@ -3999,7 +4792,7 @@ if (classicPhotoBoardImageDataUrl) {
 }
 
 async function primeAudioForInteraction({ force = false } = {}) {
-  if (audioInteractionPrimed && !force) {
+  if (audioInteractionPrimed && !force && !audio.needsUnlock?.()) {
     return;
   }
   try {
@@ -4394,33 +5187,40 @@ ui.bindControls({
     await primeAudioForInteraction();
     audio.playUiTap({ id: "restart" });
     ui.setGameOverActionNote("");
+    const restartSnapshot = state.getSnapshot();
+    const wasGameOver = restartSnapshot?.status === "over";
+    if (wasGameOver) {
+      await runGameOverExitAction(restartCurrentRun);
+      return;
+    }
     restartCurrentRun();
   },
   onGameOverHome: async () => {
     await primeAudioForInteraction();
     audio.playUiTap({ id: "gameover-home" });
     ui.setGameOverActionNote("");
-    state.goToMenu();
-    syncMenuSettingsButton();
+    await runGameOverExitAction(() => {
+      state.goToMenu();
+      syncMenuSettingsButton();
+    });
   },
   onGameOverContinue: async () => {
     await primeAudioForInteraction();
     audio.playUiTap({ id: "gameover-continue" });
     const remaining = getRemainingRewardedContinues();
-    if (remaining <= 0) {
-      ui.setGameOverActionNote(t("daily_continue_limit"));
-      syncGameOverContinueUi(state.getSnapshot());
+    if (remaining <= 0 || gameOverInterstitialInFlight || gameOverExitInFlight) {
+      if (remaining <= 0) {
+        ui.setGameOverActionNote(t("daily_continue_limit"));
+      }
       return;
     }
-    const rewardResult = await adMobService.showRewarded();
+    const rewardResult = await showRewardedContinueAd();
     if (!rewardResult.shown) {
       ui.setGameOverActionNote(t("rewarded_not_ready"));
-      syncGameOverContinueUi(state.getSnapshot());
       return;
     }
     if (!rewardResult.rewarded) {
       ui.setGameOverActionNote(t("rewarded_not_completed"));
-      syncGameOverContinueUi(state.getSnapshot());
       return;
     }
     consumeRewardedContinue();
@@ -4520,6 +5320,9 @@ ui.bindControls({
     await primeAudioForInteraction();
     audio.playUiTap({ id: "open-shop" });
     openMenuShopView();
+    if (onboardingShopGuideRuntime.active) {
+      window.setTimeout(() => showOnboardingShopGuide("claim"), 120);
+    }
   });
 
   closeBtn?.addEventListener("click", async () => {
@@ -4533,6 +5336,7 @@ ui.bindControls({
     const claimed = claimMenuShopDailyReward();
     if (claimed) {
       audio.playUiTap({ id: "claim-daily-reward" });
+      finishOnboardingShopRewardGuide();
     } else {
       audio.playUiTap({ id: "shop-claim-locked" });
     }
@@ -4632,19 +5436,27 @@ state.on("state", (snapshot) => {
   if (snapshot.status !== "menu" && menuShopViewOpen) {
     closeMenuShopView();
   }
+  syncScoreTheme(snapshot);
   syncClassicPhotoBoardConfig();
   ui.render(snapshot);
   syncFxSuspension(snapshot);
   syncGameplayBannerVisibility(snapshot);
   syncGameOverContinueUi(snapshot);
+  updateAdFlowTestPanel(snapshot);
   if (enteredLevelComplete) {
     playLevelCompleteSfxOnce();
   }
   if (enteredGameOver) {
     playGameOverSfxOnce();
-    scheduleGameOverInterstitial();
+    gameOverInterstitialHandled = false;
+    gameOverInterstitialPromise = null;
+    gameOverInterstitialInFlight = false;
+    gameOverExitInFlight = false;
+    recordGameOverForInterstitialCycle();
+    syncGameOverActionAvailability(snapshot);
+    void ensureGameOverInterstitial({ source: "gameover" });
   } else if (snapshot.status !== "over") {
-    cancelPendingGameOverInterstitial();
+    gameOverInterstitialInFlight = false;
   }
   if (previousStatus !== layoutGuardStatus) {
     const wasInteractive = isInteractiveLayoutStatus(previousStatus);
@@ -4658,6 +5470,7 @@ state.on("state", (snapshot) => {
   powerHub?.syncFromSnapshot?.(snapshot);
   syncMenuShopUi();
   syncAchievementUnlockPopups(snapshot);
+  updateComboTestPanel(snapshot);
   if (snapshot.status !== "over") {
     ui.setGameOverActionNote("");
   }
@@ -4748,12 +5561,342 @@ function runAfterFrames(frameCount, task) {
   requestAnimationFrame(step);
 }
 
+function buildComboTestPayload({ lineCount = 2, comboChain = 2 } = {}) {
+  const safeLineCount = Math.max(1, Math.floor(Number(lineCount) || 1));
+  const safeComboChain = Math.max(1, Math.floor(Number(comboChain) || 1));
+  const rows = [];
+  const cols = [];
+
+  for (let i = 0; i < safeLineCount; i += 1) {
+    if (i < 3) {
+      rows.push({ index: Math.min(7, 2 + i), tone: ((i % 5) + 1) });
+    } else {
+      cols.push({ index: Math.min(7, i - 3), tone: (((i + 1) % 5) + 1) });
+    }
+  }
+
+  const detailed = [];
+  rows.forEach((line) => {
+    for (let col = 0; col < 8; col += 1) {
+      detailed.push({ row: line.index, col, tone: line.tone });
+    }
+  });
+  cols.forEach((line) => {
+    for (let row = 0; row < 8; row += 1) {
+      detailed.push({ row, col: line.index, tone: line.tone });
+    }
+  });
+
+  const byCell = new Map();
+  detailed.forEach((cell) => {
+    byCell.set(`${cell.row}:${cell.col}`, cell);
+  });
+
+  return {
+    clearedCells: [...byCell.values()].map(({ row, col }) => ({ row, col })),
+    clearedCellsDetailed: [...byCell.values()],
+    clearedRows: rows,
+    clearedCols: cols,
+    comboChain: safeComboChain,
+    comboMultiplier: Math.min(
+      TUNING.SCORING.MAX_COMBO_MULTIPLIER,
+      1 + ((safeComboChain - 1) * TUNING.SCORING.COMBO_STEP),
+    ),
+    lineCount: safeLineCount,
+  };
+}
+
+function playComboTestDemo({ lineCount = 2, comboChain = 2, label = "" } = {}) {
+  const payload = buildComboTestPayload({ lineCount, comboChain });
+  const messagePolicy = resolveClearMessagePolicy(payload);
+  audio.playLineClear(payload);
+  ui.playClearFeedback(payload);
+  if (messagePolicy.showClear) {
+    ui.spawnClearBurstText(payload);
+  }
+  ui.pulseScore({ scoreDelta: lineCount * 100, comboChain: messagePolicy.comboChain });
+
+  if (messagePolicy.showCombo) {
+    haptics.combo();
+    ui.spawnComboBurstText(messagePolicy.comboChain, payload);
+    mascotReaction?.play?.("ambitious");
+    const comboVoice = audio.playCombo(payload);
+    if (comboVoice?.text) {
+      window.setTimeout(() => {
+        ui.spawnFloatingText(comboVoice.text, "callout");
+      }, comboVoice.delayMs ?? 0);
+    }
+  }
+
+  if (label === "Perfect" || label === "Incredible") {
+    ui.spawnFloatingText(label, "combo");
+  }
+}
+
+function playScoreCounterDemo({ delta = 100, comboChain = 1 } = {}) {
+  const snapshot = state.getSnapshot();
+  const currentDisplay = Number.isFinite(ui.displayedScoreValue)
+    ? Math.floor(ui.displayedScoreValue)
+    : Math.floor(Number(snapshot.score) || 0);
+  const safeDelta = Math.max(1, Math.floor(Number(delta) || 100));
+  const safeComboChain = Math.max(1, Math.floor(Number(comboChain) || 1));
+  ui.renderScoreValue(currentDisplay + safeDelta, {
+    ...snapshot,
+    status: snapshot.status === "menu" ? "playing" : snapshot.status,
+    comboChain: safeComboChain,
+  });
+  ui.spawnFloatingText(`+${safeDelta}`, safeComboChain >= 3 ? "combo" : "score-gold");
+}
+
+function mountComboTestPanel() {
+  if (!COMBO_TEST_PANEL_ENABLED) {
+    return;
+  }
+
+  if (!document.getElementById("combo-test-panel-toggle")) {
+    const toggle = document.createElement("button");
+    toggle.id = "combo-test-panel-toggle";
+    toggle.className = "combo-test-panel-toggle";
+    toggle.type = "button";
+    toggle.textContent = "Combo Panel";
+    toggle.addEventListener("click", () => {
+      const existing = document.getElementById("combo-test-panel");
+      if (existing) {
+        existing.classList.remove("is-hidden");
+      } else {
+        mountComboTestPanel();
+      }
+    });
+    document.body.appendChild(toggle);
+  }
+
+  if (document.getElementById("combo-test-panel")) {
+    return;
+  }
+
+  const panel = document.createElement("aside");
+  panel.id = "combo-test-panel";
+  panel.className = "combo-test-panel";
+  panel.innerHTML = `
+    <div class="combo-test-panel__header">
+      <span>Combo Test</span>
+      <button type="button" data-combo-close aria-label="Close combo test panel">x</button>
+    </div>
+    <p class="combo-test-panel__note">8 sn icinde gelen clear zincire dahil. 2+ line clear combo baslatir.</p>
+    <div class="combo-test-panel__meters">
+      <span>Canli combo <strong id="combo-test-chain">x0</strong></span>
+      <span>Pencere <strong id="combo-test-window">0.0s</strong></span>
+    </div>
+    <div class="combo-test-panel__grid">
+      <button type="button" data-combo-demo="x2">Combo x2</button>
+      <button type="button" data-combo-demo="x3">Combo x3</button>
+      <button type="button" data-combo-demo="perfect">Perfect x4</button>
+      <button type="button" data-combo-demo="incredible">Incredible x5</button>
+      <button type="button" data-combo-demo="multiline">4 Line Clear</button>
+      <button type="button" data-combo-demo="sequence">8 sn Zincir</button>
+      <button type="button" data-score-demo="100">Score +100</button>
+      <button type="button" data-score-demo="500">Score +500</button>
+      <button type="button" data-score-demo="1500">Score +1500</button>
+    </div>
+  `;
+
+  panel.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) {
+      return;
+    }
+    const demo = button.dataset.comboDemo;
+    const scoreDemo = button.dataset.scoreDemo;
+    if (button.hasAttribute("data-combo-close")) {
+      panel.classList.add("is-hidden");
+      return;
+    }
+    if (scoreDemo) {
+      const delta = Math.max(1, Math.floor(Number(scoreDemo) || 100));
+      playScoreCounterDemo({
+        delta,
+        comboChain: delta >= 1500 ? 5 : (delta >= 500 ? 3 : 1),
+      });
+      return;
+    }
+    if (demo === "x2") {
+      playComboTestDemo({ lineCount: 2, comboChain: 2, label: "Combo x2" });
+    } else if (demo === "x3") {
+      playComboTestDemo({ lineCount: 1, comboChain: 3, label: "Combo x3" });
+    } else if (demo === "perfect") {
+      playComboTestDemo({ lineCount: 1, comboChain: 4, label: "Perfect" });
+    } else if (demo === "incredible") {
+      playComboTestDemo({ lineCount: 1, comboChain: 5, label: "Incredible" });
+    } else if (demo === "multiline") {
+      playComboTestDemo({ lineCount: 4, comboChain: 4, label: "4 Line Clear" });
+    } else if (demo === "sequence") {
+      playComboTestDemo({ lineCount: 2, comboChain: 2, label: "Chain 1" });
+      window.setTimeout(() => playComboTestDemo({ lineCount: 1, comboChain: 3, label: "Chain 2" }), 1150);
+      window.setTimeout(() => playComboTestDemo({ lineCount: 1, comboChain: 4, label: "Chain 3" }), 2350);
+    }
+  });
+
+  document.body.appendChild(panel);
+}
+
+function triggerAdFlowTestGameOver(interstitialResult = "no-fill") {
+  adFlowTestInterstitialResult = interstitialResult;
+  ui.setGameOverActionNote("");
+  state.startGame({ mode: "classic" });
+  state.triggerGameOver({ reason: "ad-flow-test" });
+}
+
+function setAdFlowTestRemoveAds(enabled) {
+  removeAdsUnlocked = Boolean(enabled);
+  saveRemoveAdsUnlocked(removeAdsUnlocked);
+  syncRemoveAdsButtons();
+  syncGameplayBannerVisibility(state.getSnapshot());
+  if (removeAdsUnlocked) {
+    void adMobService.removeBanner();
+  }
+  updateAdFlowTestPanel();
+}
+
+function mountAdFlowTestPanel() {
+  if (!AD_FLOW_TEST_PANEL_ENABLED) {
+    return;
+  }
+  if (!document.getElementById("ad-flow-test-panel-toggle")) {
+    const toggle = document.createElement("button");
+    toggle.id = "ad-flow-test-panel-toggle";
+    toggle.className = "combo-test-panel-toggle ad-flow-test-panel-toggle";
+    toggle.type = "button";
+    toggle.textContent = "Ad Panel";
+    toggle.setAttribute("aria-controls", "ad-flow-test-panel");
+    toggle.addEventListener("click", () => {
+      document.getElementById("ad-flow-test-panel")?.classList.toggle("is-hidden");
+    });
+    document.body.appendChild(toggle);
+  }
+  if (document.getElementById("ad-flow-test-panel")) {
+    return;
+  }
+  const panel = document.createElement("aside");
+  panel.id = "ad-flow-test-panel";
+  panel.className = "combo-test-panel ad-flow-test-panel is-hidden";
+  panel.innerHTML = `
+    <div class="combo-test-panel__header">
+      <span>Ad Flow Test</span>
+      <button type="button" data-ad-test-close aria-label="Close ad test panel">x</button>
+    </div>
+    <p class="combo-test-panel__note">Web test: no real ad requests are made.</p>
+    <div class="combo-test-panel__meters">
+      <span>State <strong id="ad-test-state">menu</strong></span>
+      <span>Remove Ads <strong id="ad-test-remove-ads">off</strong></span>
+    </div>
+    <div class="combo-test-panel__grid">
+      <button type="button" data-ad-test="game-over">Game Over</button>
+      <button type="button" data-ad-test="interstitial-success">Interstitial success</button>
+      <button type="button" data-ad-test="interstitial-no-fill">Interstitial no-fill</button>
+      <button type="button" data-ad-test="rewarded-success">Rewarded success</button>
+      <button type="button" data-ad-test="rewarded-no-fill">Rewarded no-fill</button>
+      <button type="button" data-ad-test="try-again">Try Again</button>
+      <button type="button" data-ad-test="home">Home</button>
+      <button type="button" data-ad-test="remove-ads-on">Remove Ads active</button>
+      <button type="button" data-ad-test="remove-ads-off">Remove Ads passive</button>
+    </div>
+  `;
+  panel.addEventListener("click", async (event) => {
+    const button = event.target.closest("button");
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    if (button.hasAttribute("data-ad-test-close")) {
+      panel.classList.add("is-hidden");
+      return;
+    }
+    const action = button.dataset.adTest;
+    if (action === "game-over") {
+      triggerAdFlowTestGameOver("no-fill");
+    } else if (action === "interstitial-success") {
+      triggerAdFlowTestGameOver("success");
+    } else if (action === "interstitial-no-fill") {
+      triggerAdFlowTestGameOver("no-fill");
+    } else if (action === "rewarded-success" || action === "rewarded-no-fill") {
+      adFlowTestRewardedResult = action === "rewarded-success" ? "success" : "no-fill";
+      if (state.getSnapshot().status !== "over") {
+        triggerAdFlowTestGameOver("no-fill");
+      }
+      if (gameOverInterstitialPromise) {
+        await gameOverInterstitialPromise;
+      }
+      document.getElementById("gameover-continue-btn")?.click();
+    } else if (action === "try-again") {
+      document.getElementById("restart-gameover-btn")?.click();
+    } else if (action === "home") {
+      document.getElementById("gameover-home-btn")?.click();
+    } else if (action === "remove-ads-on") {
+      setAdFlowTestRemoveAds(true);
+    } else if (action === "remove-ads-off") {
+      setAdFlowTestRemoveAds(false);
+    }
+    updateAdFlowTestPanel();
+  });
+  document.body.appendChild(panel);
+  updateAdFlowTestPanel();
+}
+
+function updateAdFlowTestPanel(snapshot = state.getSnapshot?.()) {
+  if (!AD_FLOW_TEST_PANEL_ENABLED || !snapshot) {
+    return;
+  }
+  const stateLabel = document.getElementById("ad-test-state");
+  const removeAdsLabel = document.getElementById("ad-test-remove-ads");
+  if (stateLabel) {
+    stateLabel.textContent = gameOverInterstitialInFlight ? "ad open" : String(snapshot.status || "unknown");
+  }
+  if (removeAdsLabel) {
+    removeAdsLabel.textContent = removeAdsUnlocked ? "active" : "passive";
+  }
+}
+
+function updateComboTestPanel(snapshot = state.getSnapshot?.()) {
+  if (!COMBO_TEST_PANEL_ENABLED || !snapshot) {
+    return;
+  }
+  const chainEl = document.getElementById("combo-test-chain");
+  const windowEl = document.getElementById("combo-test-window");
+  if (chainEl) {
+    chainEl.textContent = `x${Math.max(0, Math.floor(Number(snapshot.comboChain) || 0))}`;
+  }
+  if (windowEl) {
+    const remainingSec = Math.max(0, Number(snapshot.comboWindowRemainingMs ?? 0) / 1000);
+    windowEl.textContent = `${remainingSec.toFixed(1)}s`;
+  }
+}
+
 state.on("placed", (payload) => {
   audio.playPlace(payload);
   haptics.place();
   ui.playPlacementFeedback(payload.placedCells);
-  ui.pulseScore();
+  ui.pulseScore({ scoreDelta: payload.scoreDelta ?? 0, comboChain: payload.comboChain ?? 1 });
   ui.spawnFloatingText(`+${payload.scoreDelta}`, "score-gold");
+
+  if (onboardingDemoRuntime.active && onboardingDemoRuntime.data) {
+    clearOnboardingDemoGuide();
+    if (onboardingDemoRuntime.advanceTimer) {
+      window.clearTimeout(onboardingDemoRuntime.advanceTimer);
+      onboardingDemoRuntime.advanceTimer = 0;
+    }
+    const stage = onboardingDemoRuntime.data.stages[onboardingDemoRuntime.stageIndex];
+    const isExpectedMove =
+      stage &&
+      payload.slotIndex === stage.slotIndex &&
+      placedCellsMatchDemoTarget(stage, payload.placedCells);
+    onboardingDemoRuntime.advanceTimer = window.setTimeout(() => {
+      onboardingDemoRuntime.advanceTimer = 0;
+      if (isExpectedMove) {
+        advanceOnboardingDemoStage();
+      } else {
+        resetCurrentOnboardingDemoStage();
+      }
+    }, isExpectedMove ? 1180 : 420);
+  }
 
   const lineCount =
     (Array.isArray(payload.clearedRows) ? payload.clearedRows.length : 0) +
@@ -4837,12 +5980,15 @@ state.on("placed", (payload) => {
 state.on("cleared", (payload) => {
   lastClearFxAtMs = performance.now();
   audio.playLineClear(payload);
-  const lineCount = payload.lineCount ?? 0;
-  const comboVisualChain = payload.comboChain > 1
-    ? payload.comboChain
-    : (lineCount >= 2 ? 2 : 1);
-  const isComboClear = comboVisualChain > 1;
+  const messagePolicy = resolveClearMessagePolicy(payload);
+  const lineCount = messagePolicy.lineCount;
+  const comboVisualChain = messagePolicy.comboChain;
+  const isComboClear = messagePolicy.isCombo;
   const normalizedClearPayload = { ...payload, comboChain: comboVisualChain };
+  const scoreDelta = Math.max(
+    0,
+    Math.floor(Number(payload?.scoreDelta ?? payload?.scoreAwarded ?? (lineCount * 100)) || 0),
+  );
   const estimatedClearFxMs =
     640 +
     Math.min(360, lineCount * 110) +
@@ -4852,13 +5998,13 @@ state.on("cleared", (payload) => {
   if (IOS_PERF_SAFE_MODE) {
     runAfterFrames(0, () => {
       ui.playClearFeedback(normalizedClearPayload);
-      ui.spawnClearBurstText(normalizedClearPayload);
-      ui.pulseScore();
+      if (messagePolicy.showClear) {
+        ui.spawnClearBurstText(normalizedClearPayload);
+      }
+      ui.pulseScore({ scoreDelta, comboChain: comboVisualChain });
     });
     if (isComboClear) {
       haptics.combo();
-      ui.playComboFeedback(comboVisualChain);
-      ui.playComboAccent(normalizedClearPayload);
       ui.spawnComboBurstText(comboVisualChain, normalizedClearPayload);
       mascotReaction?.play?.("ambitious");
     } else {
@@ -4875,15 +6021,15 @@ state.on("cleared", (payload) => {
   // Spread clear/combo feedback across adjacent frames to reduce single-frame spikes.
   runAfterFrames(0, () => {
     ui.playClearFeedback(normalizedClearPayload);
-    ui.pulseScore();
+    ui.pulseScore({ scoreDelta, comboChain: comboVisualChain });
   });
 
   runAfterFrames(1, () => {
-    ui.spawnClearBurstText(normalizedClearPayload);
+    if (messagePolicy.showClear) {
+      ui.spawnClearBurstText(normalizedClearPayload);
+    }
     if (isComboClear) {
       haptics.combo();
-      ui.playComboFeedback(comboVisualChain);
-      ui.playComboAccent(normalizedClearPayload);
     } else {
       haptics.clear();
     }
@@ -4929,7 +6075,7 @@ state.on("tntExploded", (payload) => {
   ui.playTntExplosionFeedback(payload);
   haptics.pulse([20, 36, 32, 44, 26, 48]);
   audio.playTntExplosion();
-  ui.pulseScore();
+  ui.pulseScore({ scoreDelta, comboChain: 2 });
   if (scoreDelta > 0) {
     ui.spawnFloatingText(`+${scoreDelta}`, "score-gold");
   }
@@ -4945,7 +6091,7 @@ state.on("hammerHit", (payload) => {
   ui.playHammerStrikeFeedback(payload);
   haptics.pulse([16, 22, 12]);
   audio.playHammerHit();
-  ui.pulseScore();
+  ui.pulseScore({ scoreDelta, comboChain: 1 });
   if (scoreDelta > 0) {
     ui.spawnFloatingText(`+${scoreDelta}`, "score-gold");
   }
@@ -4975,6 +6121,9 @@ state.on("gameOver", (payload) => {
 });
 
 dragDrop.init();
+mountComboTestPanel();
+mountAdFlowTestPanel();
+updateComboTestPanel();
 const INITIAL_RENDER_PRELOAD_BUDGET_MS = isIosDevice() ? 950 : 240;
 let initialRenderDone = false;
 const performInitialRender = () => {
@@ -5005,6 +6154,10 @@ const performInitialRender = () => {
     layoutGuardStatus = snapshot.status;
     scheduleLayoutGuards();
     mascotReaction = createMascotReactionOverlay();
+    const shouldStartRewardGuide = shouldStartOnboardingShopRewardGuide();
+    if (shouldStartRewardGuide && state.getSnapshot().status === "menu") {
+      window.setTimeout(() => startOnboardingShopRewardGuide(), 220);
+    }
   } catch (error) {
     console.warn("[startup] initial render failed.", error);
   } finally {

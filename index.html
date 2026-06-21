@@ -10,6 +10,7 @@
     <title>Grid Crown: Block Puzzle</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./assets/icons/icon-180.png" />
+    <link rel="preload" as="image" href="./assets/logo-menu-fast.webp?v=20260617logo1" fetchpriority="high" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap" rel="stylesheet" />
@@ -18,7 +19,7 @@
       rel="stylesheet"
     />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles/main.css?v=20260513splash2" />
+    <link rel="stylesheet" href="./styles/main.css?v=20260617sizeopt1" />
     <link rel="stylesheet" href="./styles/journey.css?v=20260430journey8" />
   </head>
   <body>
@@ -290,7 +291,17 @@
 
           <section class="menu-brand">
             <div class="menu-logo-wrap">
-              <img src="./assets/logo.png" class="menu-logo-img" alt="Grid Crown" draggable="false" />
+              <img
+                src="./assets/logo-menu-fast.webp?v=20260617logo1"
+                class="menu-logo-img"
+                alt="Grid Crown"
+                width="960"
+                height="549"
+                loading="eager"
+                decoding="sync"
+                fetchpriority="high"
+                draggable="false"
+              />
             </div>
           </section>
           <section class="menu-cta">
@@ -395,11 +406,27 @@
             </span>
           </button>
         </div>
+        <p class="gameover-action-note" id="gameover-action-note" aria-live="polite"></p>
       </div>
     </div>
 
-    <div class="no-space-banner" id="no-space-banner" role="status" aria-live="polite">
-      No space left
+    <div class="overlay overlay--soft-update" id="soft-update-modal" aria-hidden="true">
+      <div class="soft-update-card" role="dialog" aria-modal="true" aria-labelledby="soft-update-title">
+        <span class="soft-update-badge" aria-hidden="true">NEW</span>
+        <div class="soft-update-star" aria-hidden="true"></div>
+        <h2 class="soft-update-title" id="soft-update-title">New Update Available</h2>
+        <p class="soft-update-message" id="soft-update-message">Update Grid Crown for the latest improvements and the best game experience.</p>
+        <div class="soft-update-actions">
+          <a
+            class="soft-update-btn soft-update-btn--primary"
+            id="soft-update-open-btn"
+            href="https://play.google.com/store/apps/details?id=com.ozgur72.gridcrownblockblast"
+            target="_blank"
+            rel="noopener noreferrer"
+          >Update</a>
+          <button class="soft-update-btn soft-update-btn--later" id="soft-update-later-btn" type="button">Later</button>
+        </div>
+      </div>
     </div>
 
     <div class="overlay overlay--level-complete" id="adventure-complete-modal">
@@ -488,7 +515,7 @@
         measurementId: "G-MM3HSX1BMY",
       };
     </script>
-    <script type="module" src="./src/main.js?v=20260513splash2"></script>
+    <script type="module" src="./src/main.js?v=20260617sizeopt1"></script>
   </body>
 </html>
 

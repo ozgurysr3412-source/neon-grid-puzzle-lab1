@@ -130,6 +130,14 @@ export class SoundManager {
     return !this.enabled;
   }
 
+  needsUnlock() {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) {
+      return false;
+    }
+    return !this.ctx || this.ctx.state !== "running";
+  }
+
   async unlock() {
     // Keep the resume call in the same gesture call-stack on iOS Safari/WKWebView.
     void this.ensureContext();
@@ -643,6 +651,31 @@ export class SoundManager {
       allowOverlap: true,
       volumeScale: Math.min(1.15, 1 + ((lines - 1) * 0.08)),
     });
+  }
+
+  playCloudClearTier(lineCount = 1) {
+    const tier = Math.max(1, Math.min(3, Math.floor(Number(lineCount) || 1)));
+    const layers = tier === 1
+      ? [{ when: 0, rate: 0.94, volume: 0.84 }]
+      : (tier === 2
+        ? [
+            { when: 0, rate: 0.92, volume: 0.82 },
+            { when: 0.085, rate: 1.12, volume: 0.58 },
+          ]
+        : [
+            { when: 0, rate: 0.88, volume: 0.84 },
+            { when: 0.075, rate: 1.06, volume: 0.62 },
+            { when: 0.15, rate: 1.24, volume: 0.46 },
+          ]);
+    layers.forEach((layer) => {
+      this.play("clear", {
+        allowOverlap: true,
+        when: layer.when,
+        playbackRate: layer.rate,
+        volumeScale: layer.volume,
+      });
+    });
+    return { tier, layers: layers.length };
   }
 
   playCombo(payload) {

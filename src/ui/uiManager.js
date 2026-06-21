@@ -1,5 +1,6 @@
 ﻿import { JourneyController } from "./journey/journeyController.js";
 import { evaluateAchievements } from "../meta/achievements.js";
+import { formatScoreByLocale, t } from "./localization.js";
 
 const LEADERBOARD_COUNTRY_CODES = Object.freeze([
   "AF", "AL", "DZ", "AD", "AO", "AG", "AR", "AM", "AU", "AT", "AZ",
@@ -586,6 +587,7 @@ export class UIManager {
     this.boardSize = tuning.BOARD_SIZE;
     this.cells = new Map();
     this.ghostedMap = new Map();
+    this.previewStarSignature = "";
     this.gameOverFxTimer = 0;
     this.fxParticles = [];
     this.fxFlashes = [];
@@ -599,9 +601,15 @@ export class UIManager {
     this.fxAdventureBeams = [];
     this.fxCracks = [];
     this.fxShards = [];
+    this.clearFxParticlePool = [];
+    this.clearFxShardPool = [];
     this.clearPulseTimer = 0;
+    this.lineClearTilePool = [];
+    this.lineClearParticlePool = [];
     this.scorePulseTimer = 0;
     this.scoreStagePulseTimer = 0;
+    this.scoreCountRafId = 0;
+    this.displayedScoreValue = null;
     this.fxRafId = 0;
     this.fxLastTime = 0;
     this.fxProbeEnabled = false;
@@ -616,10 +624,6 @@ export class UIManager {
     this.fxPerfP95Ms = 16.7;
     this.fxPerfUpdateCostMs = 0;
     this.fxPerfDrawCostMs = 0;
-    this.noSpaceBannerTimer = 0;
-    this.noSpaceBannerVisible = false;
-    this.noSpaceGameOverGateActive = false;
-    this.noSpaceBannerDurationMs = 820;
     this.comboBurstActiveUntilMs = 0;
     this.clearBurstActiveUntilMs = 0;
     this.floatingTextPool = [];
@@ -631,6 +635,7 @@ export class UIManager {
     this.fxResizeObserver = null;
     this.classRestartRafMap = new WeakMap();
     this.fxSuspended = false;
+    this.boardFrameFxDisabled = false;
     this.fxProfile = resolveFxQualityProfile();
     this.applyPerformanceClass();
     this.fxAdaptive = {
@@ -751,6 +756,7 @@ export class UIManager {
     this.elements = {
       gameShell: document.getElementById("game-shell"),
       board: document.getElementById("board"),
+      boardClip: document.getElementById("board-clip"),
       boardWrap: document.getElementById("board-wrap"),
       boardFillCanvas: document.getElementById("board-fill-canvas"),
       fxCanvas: document.getElementById("fx-canvas"),
@@ -765,7 +771,6 @@ export class UIManager {
       journeyOverlay: document.getElementById("journey-overlay"),
       settingsOverlay: document.getElementById("settings-overlay"),
       gameOverModal: document.getElementById("gameover-modal"),
-      noSpaceBanner: document.getElementById("no-space-banner"),
       adventureCompleteModal: document.getElementById("adventure-complete-modal"),
       milestoneUnlockModal: document.getElementById("milestone-unlock-modal"),
       adventureCompleteTitle: document.getElementById("adventure-complete-title"),
@@ -1394,10 +1399,10 @@ export class UIManager {
       }
     }
     if (subtitle) {
-      subtitle.textContent = safeTab === "weekly" ? "Weekly Race" : "Global Top Players";
+      subtitle.textContent = safeTab === "weekly" ? t("weekly_race") : t("global_top_players");
     }
     if (modeLabel) {
-      modeLabel.textContent = safeTab === "weekly" ? "Weekly" : "Global";
+      modeLabel.textContent = safeTab === "weekly" ? t("weekly") : t("global");
     }
     if (nameInput) {
       nameInput.value = this.menuLeaderboardProfile.name ?? "Player";
@@ -1415,7 +1420,7 @@ export class UIManager {
       if (!entries.length) {
         const empty = document.createElement("li");
         empty.className = "menu-leaderboard-empty";
-        empty.textContent = "No ranking data yet";
+        empty.textContent = t("no_ranking_data");
         list.appendChild(empty);
       } else {
         entries.forEach((item) => {
@@ -1526,8 +1531,8 @@ export class UIManager {
     }
     if (this.elements.menuBadgeDetailStatus) {
       this.elements.menuBadgeDetailStatus.textContent = item.unlocked
-        ? "Unlocked"
-        : `In progress - ${item.progressText}`;
+        ? t("status_unlocked")
+        : t("in_progress", { progress: item.progressText });
       this.elements.menuBadgeDetailStatus.classList.toggle("is-locked", !item.unlocked);
     }
     detail.classList.add("is-visible");
@@ -1577,13 +1582,13 @@ export class UIManager {
       const unlockedBtn = filters.querySelector("[data-filter='unlocked']");
       const lockedBtn = filters.querySelector("[data-filter='locked']");
       if (allBtn) {
-        allBtn.textContent = `All (${evaluation.totalCount})`;
+        allBtn.textContent = `${t("all")} (${evaluation.totalCount})`;
       }
       if (unlockedBtn) {
-        unlockedBtn.textContent = `Unlocked (${evaluation.unlockedCount})`;
+        unlockedBtn.textContent = `${t("unlocked")} (${evaluation.unlockedCount})`;
       }
       if (lockedBtn) {
-        lockedBtn.textContent = `Locked (${Math.max(0, evaluation.totalCount - evaluation.unlockedCount)})`;
+        lockedBtn.textContent = `${t("locked")} (${Math.max(0, evaluation.totalCount - evaluation.unlockedCount)})`;
       }
     }
     filters.querySelectorAll("[data-filter]").forEach((node) => {
@@ -1603,7 +1608,10 @@ export class UIManager {
     const summary = this.elements.menuBadgesSummary;
     const progressFill = this.elements.menuBadgesProgressFill;
     if (summary) {
-      summary.textContent = `${evaluation.unlockedCount}/${evaluation.totalCount} unlocked`;
+      summary.textContent = t("rank_unlocked_summary", {
+        unlocked: evaluation.unlockedCount,
+        total: evaluation.totalCount,
+      });
     }
     if (progressFill) {
       const ratio = evaluation.totalCount > 0 ? (evaluation.unlockedCount / evaluation.totalCount) : 0;
@@ -1631,7 +1639,10 @@ export class UIManager {
       cell.classList.toggle("is-unlocked", achievement.unlocked);
       cell.setAttribute("role", "listitem");
       cell.setAttribute("title", achievement.name);
-      cell.setAttribute("aria-label", `${achievement.name} ${achievement.unlocked ? "unlocked" : "locked"}`);
+      cell.setAttribute(
+        "aria-label",
+        `${achievement.name} ${achievement.unlocked ? t("status_unlocked_word") : t("status_locked")}`,
+      );
       cell.dataset.achievementId = achievement.id;
       const hadPrevState = this.menuBadgeUnlockStates.has(achievement.id);
       const prevUnlocked = hadPrevState ? this.menuBadgeUnlockStates.get(achievement.id) === true : achievement.unlocked;
@@ -1762,39 +1773,39 @@ export class UIManager {
     const canResume = Boolean(this.settingsPanel.canResume);
 
     if (settingsSoundToggleBtn) {
-      settingsSoundToggleBtn.textContent = soundEnabled ? "On" : "Off";
+      settingsSoundToggleBtn.textContent = soundEnabled ? t("on") : t("off");
       settingsSoundToggleBtn.setAttribute("aria-pressed", soundEnabled ? "true" : "false");
       settingsSoundToggleBtn.classList.toggle("is-off", !soundEnabled);
     }
     if (settingsHapticsToggleBtn) {
-      settingsHapticsToggleBtn.textContent = hapticsEnabled ? "On" : "Off";
+      settingsHapticsToggleBtn.textContent = hapticsEnabled ? t("on") : t("off");
       settingsHapticsToggleBtn.setAttribute("aria-pressed", hapticsEnabled ? "true" : "false");
       settingsHapticsToggleBtn.classList.toggle("is-off", !hapticsEnabled);
     }
     if (settingsVisualModeBtn) {
       const visualModeLabel = VISUAL_MODE_LABELS[visualModeKey] ?? VISUAL_MODE_LABELS.royal;
       settingsVisualModeBtn.textContent = visualModeLabel;
-      settingsVisualModeBtn.setAttribute("aria-label", `Visual mode: ${visualModeLabel}. Tap to cycle`);
+      settingsVisualModeBtn.setAttribute("aria-label", `${t("visual_mode")}: ${visualModeLabel}`);
     }
     if (settingsRelaxingToggleBtn) {
-      settingsRelaxingToggleBtn.textContent = relaxingModeEnabled ? "On" : "Off";
+      settingsRelaxingToggleBtn.textContent = relaxingModeEnabled ? t("on") : t("off");
       settingsRelaxingToggleBtn.setAttribute("aria-pressed", relaxingModeEnabled ? "true" : "false");
       settingsRelaxingToggleBtn.classList.toggle("is-off", !relaxingModeEnabled);
     }
     if (settingsRelaxingMusicToggleBtn) {
-      settingsRelaxingMusicToggleBtn.textContent = relaxingMusicEnabled ? "On" : "Off";
+      settingsRelaxingMusicToggleBtn.textContent = relaxingMusicEnabled ? t("on") : t("off");
       settingsRelaxingMusicToggleBtn.setAttribute("aria-pressed", relaxingMusicEnabled ? "true" : "false");
       settingsRelaxingMusicToggleBtn.classList.toggle("is-off", !relaxingMusicEnabled);
       settingsRelaxingMusicToggleBtn.disabled = false;
       settingsRelaxingMusicToggleBtn.classList.remove("is-disabled");
     }
     if (settingsPhotoBoardToggleBtn) {
-      settingsPhotoBoardToggleBtn.textContent = photoBoardEnabled ? "On" : "Off";
+      settingsPhotoBoardToggleBtn.textContent = photoBoardEnabled ? t("on") : t("off");
       settingsPhotoBoardToggleBtn.setAttribute("aria-pressed", photoBoardEnabled ? "true" : "false");
       settingsPhotoBoardToggleBtn.classList.toggle("is-off", !photoBoardEnabled);
     }
     if (settingsPhotoBoardPickBtn) {
-      settingsPhotoBoardPickBtn.textContent = photoBoardReady ? "Change" : "Choose";
+      settingsPhotoBoardPickBtn.textContent = photoBoardReady ? t("change") : t("choose");
     }
     if (settingsPhotoBoardClearBtn) {
       settingsPhotoBoardClearBtn.disabled = !photoBoardReady;
@@ -1940,7 +1951,7 @@ export class UIManager {
       ...Object.values(CLOUD_WORD_ASSETS.combo || {}),
       ...Object.values(CLOUD_WORD_ASSETS.clear || {}),
       ...Object.values(MOVE_APPROVAL_ICONS || {}),
-      "./assets/logo.png",
+      "./assets/logo-menu-fast.webp?v=20260617logo1",
     ];
     const uniqueSources = Array.from(new Set(criticalPreloadList.filter((src) => typeof src === "string" && src.length > 0)));
     this.coreGameplaySpritePreloadPromise = Promise.allSettled(
@@ -2410,6 +2421,25 @@ export class UIManager {
     this.domFxTotalActive = 0;
   }
 
+  setBoardFrameFxDisabled(disabled) {
+    this.boardFrameFxDisabled = Boolean(disabled);
+    this.elements.boardWrap?.classList.toggle("board-wrap--fx-disabled", this.boardFrameFxDisabled);
+    if (!this.boardFrameFxDisabled) {
+      return;
+    }
+    this.elements.boardWrap?.classList.remove(
+      "board-wrap--shake",
+      "board-wrap--clear-premium",
+      "board-wrap--combo",
+      "board-wrap--combo-accent",
+      "board-wrap--combo-overdrive",
+      "board-wrap--shake-heavy",
+    );
+    this.elements.boardWrap
+      ?.querySelectorAll(".board-frame-reaction, .board-edge-burst")
+      .forEach((node) => node.remove());
+  }
+
   beginDragSession(slotIndex = null) {
     this.dragSessionActive = true;
     this.dragSessionSlot = Number.isInteger(slotIndex) ? slotIndex : null;
@@ -2719,7 +2749,12 @@ export class UIManager {
     };
   }
 
-  showGhost(cells, isValid) {
+  showGhost(cells, isValid, clearPreview = null) {
+    if (isValid) {
+      this.updatePreviewStars(clearPreview);
+    } else {
+      this.clearPreviewStars();
+    }
     const ghostClass = isValid ? "cell--ghost-valid" : "cell--ghost-invalid";
     const desired = new Map();
     cells.forEach(({ row, col }) => {
@@ -2729,14 +2764,149 @@ export class UIManager {
   }
 
   clearGhost() {
-    if (!this.ghostedMap.size) {
+    if (!this.ghostedMap.size && !this.previewStarSignature) {
       return;
     }
+    this.clearPreviewStars();
     this.ghostedMap.forEach((_, key) => {
       const cell = this.cells.get(key);
       cell?.classList.remove("cell--ghost-valid", "cell--ghost-invalid", "cell--hint");
     });
     this.ghostedMap.clear();
+  }
+
+  updatePreviewStars(clearPreview = null) {
+    const rows = this.resolveLineDetails(clearPreview?.rows)
+      .map((line) => Math.floor(Number(line.index)))
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < this.boardSize)
+      .sort((a, b) => a - b);
+    const cols = this.resolveLineDetails(clearPreview?.cols)
+      .map((line) => Math.floor(Number(line.index)))
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < this.boardSize)
+      .sort((a, b) => a - b);
+    const signature = `r:${rows.join(",")}|c:${cols.join(",")}`;
+    if (!rows.length && !cols.length) {
+      this.clearPreviewStars();
+      return;
+    }
+    if (signature === this.previewStarSignature) {
+      this.syncPreviewStarLayerBounds();
+      return;
+    }
+    this.previewStarSignature = signature;
+    this.renderPreviewStars(rows, cols);
+  }
+
+  clearPreviewStars() {
+    if (!this.previewStarSignature && !(this.elements.previewStarLayer instanceof HTMLElement)) {
+      return;
+    }
+    this.previewStarSignature = "";
+    const layer = this.elements.previewStarLayer;
+    if (layer instanceof HTMLElement) {
+      layer.textContent = "";
+      layer.classList.remove("is-active");
+    }
+  }
+
+  ensurePreviewStarLayer() {
+    if (this.elements.previewStarLayer instanceof HTMLElement) {
+      return this.elements.previewStarLayer;
+    }
+    const parent = document.body;
+    if (!(parent instanceof HTMLElement)) {
+      return null;
+    }
+    const layer = document.createElement("div");
+    layer.id = "preview-star-layer";
+    layer.className = "preview-star-layer";
+    layer.setAttribute("aria-hidden", "true");
+    parent.appendChild(layer);
+    this.elements.previewStarLayer = layer;
+    return layer;
+  }
+
+  syncPreviewStarLayerBounds() {
+    const layer = this.elements.previewStarLayer;
+    const board = this.elements.board;
+    if (!(layer instanceof HTMLElement) || !(board instanceof HTMLElement)) {
+      return;
+    }
+    const rect = board.getBoundingClientRect();
+    layer.style.left = `${rect.left}px`;
+    layer.style.top = `${rect.top}px`;
+    layer.style.width = `${rect.width}px`;
+    layer.style.height = `${rect.height}px`;
+  }
+
+  renderPreviewStars(rows, cols) {
+    const layer = this.ensurePreviewStarLayer();
+    if (!layer) {
+      return;
+    }
+    this.syncPreviewStarLayerBounds();
+    layer.textContent = "";
+    layer.classList.add("is-active");
+    rows.forEach((row, lineIndex) => {
+      this.appendPreviewStarLine(layer, {
+        type: "row",
+        index: row,
+        starCount: 24,
+        lineIndex,
+      });
+    });
+    cols.forEach((col, lineIndex) => {
+      this.appendPreviewStarLine(layer, {
+        type: "col",
+        index: col,
+        starCount: 22,
+        lineIndex: rows.length + lineIndex,
+      });
+    });
+  }
+
+  appendPreviewStarLine(layer, { type, index, starCount, lineIndex }) {
+    const line = document.createElement("span");
+    line.className = `preview-star-line preview-star-line--${type}`;
+    if (type === "row") {
+      line.style.gridRow = String(index + 1);
+      line.style.gridColumn = "1 / -1";
+    } else {
+      line.style.gridRow = "1 / -1";
+      line.style.gridColumn = String(index + 1);
+    }
+
+    for (let slot = 0; slot < starCount; slot += 1) {
+      line.appendChild(this.createPreviewStar({ type, slot, starCount, lineIndex }));
+    }
+    layer.appendChild(line);
+  }
+
+  createPreviewStar({ type, slot, starCount, lineIndex }) {
+    const star = document.createElement("span");
+    const seed = ((slot + 1) * 37) + (lineIndex * 19);
+    const basePosition = starCount <= 1 ? 50 : (slot / (starCount - 1)) * 100;
+    const jitter = ((seed % 11) - 5) * 0.7;
+    const linePosition = Math.max(2, Math.min(98, basePosition + jitter));
+    const crossPosition = 49 + (((seed * 7) % 13) - 6) * 1.55;
+    const size = 3.4 + ((seed % 6) * 1.08);
+    const delay = -((seed % 13) * 0.09);
+    const duration = 0.86 + ((seed % 5) * 0.1);
+    const driftX = type === "row" ? (((seed % 5) - 2) * 1) : (((seed % 3) - 1) * 0.7);
+    const driftY = type === "row" ? -(2.5 + (seed % 5)) : (((seed % 5) - 2) * 1);
+    const tilt = ((seed % 7) - 3) * 7;
+
+    const variant = slot % 7 === 0 ? "dot" : (slot % 3 === 0 ? "burst" : "spark");
+    star.className = `preview-star preview-star--${variant}`;
+    star.style.setProperty("--line-pos", `${linePosition.toFixed(2)}%`);
+    star.style.setProperty("--cross-pos", `${crossPosition.toFixed(2)}%`);
+    star.style.setProperty("--star-size", `${size.toFixed(1)}px`);
+    star.style.setProperty("--star-delay", `${delay.toFixed(2)}s`);
+    star.style.setProperty("--star-duration", `${duration.toFixed(2)}s`);
+    star.style.setProperty("--star-drift-x", `${driftX.toFixed(1)}px`);
+    star.style.setProperty("--star-drift-y", `${driftY.toFixed(1)}px`);
+    star.style.setProperty("--star-tilt", `${tilt.toFixed(0)}deg`);
+    return star;
   }
 
   showHammerTargetPreview({ row, col, isValid = true } = {}) {
@@ -2828,6 +2998,9 @@ export class UIManager {
     }
     const rowLines = this.resolveLineDetails(payload.clearedRows);
     const colLines = this.resolveLineDetails(payload.clearedCols);
+    // Read geometry before cell classes/styles change so the clear path does not
+    // force layout between DOM mutations and canvas effect creation.
+    const boardRect = this.elements.board?.getBoundingClientRect();
     const collectedFromPayload = new Set(
       (payload.collectedObjectiveCells ?? [])
         .filter((cell) => Number.isInteger(cell?.row) && Number.isInteger(cell?.col))
@@ -2856,20 +3029,6 @@ export class UIManager {
       };
     });
 
-    this.elements.boardWrap.classList.add("board-wrap--shake");
-    setTimeout(() => {
-      this.elements.boardWrap.classList.remove("board-wrap--shake");
-    }, this.tuning.FX.SHAKE_MS);
-
-    this.elements.boardWrap.classList.add("board-wrap--clear-premium");
-    if (this.clearPulseTimer) {
-      clearTimeout(this.clearPulseTimer);
-    }
-    this.clearPulseTimer = setTimeout(() => {
-      this.elements.boardWrap.classList.remove("board-wrap--clear-premium");
-      this.clearPulseTimer = 0;
-    }, 320);
-
     const flashedCells = [];
     dominantDetailedCells.forEach(({ row, col, tone }) => {
       const cell = this.cells.get(this.cellKey(row, col));
@@ -2897,18 +3056,199 @@ export class UIManager {
       }, this.tuning.FX.CLEAR_FLASH_MS + 60);
     }
 
+    const flashedCellSet = new Set(flashedCells);
+    this.paintLineDominantLines(rowLines, colLines, flashedCellSet);
     rowLines.forEach(({ index, tone }) => {
-      this.paintLineDominant("row", index, tone);
       this.spawnLineSweep("row", index, tone);
     });
     colLines.forEach(({ index, tone }) => {
-      this.paintLineDominant("col", index, tone);
       this.spawnLineSweep("col", index, tone);
     });
     // Locked clear style: Clear + Shatter hybrid (accepted panel version).
-    this.spawnLineScorePopups(rowLines, colLines, payload.comboChain ?? 1);
-    this.spawnCanvasExplosion(dominantDetailedCells, rowLines, colLines);
-    this.spawnUnityShatterDebris(dominantDetailedCells);
+    this.spawnLineScorePopups(rowLines, colLines, payload.comboChain ?? 1, boardRect);
+    this.spawnCanvasExplosion(dominantDetailedCells, rowLines, colLines, boardRect);
+    this.spawnUnityShatterDebris(dominantDetailedCells, boardRect);
+  }
+
+  acquireLineClearTile(tier = 1) {
+    const tile = this.lineClearTilePool.pop() ?? document.createElement("span");
+    tile.className = `line-clear-tile line-clear-tile--tier-${tier}`;
+    tile.style.cssText = "";
+    return tile;
+  }
+
+  recycleLineClearTile(tile) {
+    if (!tile) {
+      return;
+    }
+    tile.remove();
+    if (this.lineClearTilePool.length < 32) {
+      this.lineClearTilePool.push(tile);
+    }
+  }
+
+  acquireLineClearParticle() {
+    return this.lineClearParticlePool.pop() ?? {};
+  }
+
+  releaseLineClearParticle(particle) {
+    if (particle && this.lineClearParticlePool.length < 128) {
+      this.lineClearParticlePool.push(particle);
+    }
+  }
+
+  acquireClearFxParticle() {
+    const particle = this.clearFxParticlePool.pop() ?? {};
+    const trail = Array.isArray(particle.trail) ? particle.trail : [];
+    trail.length = 0;
+    particle.trail = trail;
+    particle.clearFxPooled = true;
+    return particle;
+  }
+
+  releaseClearFxParticle(particle) {
+    if (!particle || this.clearFxParticlePool.length >= 560) {
+      return;
+    }
+    if (Array.isArray(particle.trail)) {
+      particle.trail.length = 0;
+    }
+    this.clearFxParticlePool.push(particle);
+  }
+
+  acquireClearFxShard() {
+    const shard = this.clearFxShardPool.pop() ?? {};
+    shard.clearFxPooled = true;
+    return shard;
+  }
+
+  releaseClearFxShard(shard) {
+    if (shard && this.clearFxShardPool.length < 240) {
+      this.clearFxShardPool.push(shard);
+    }
+  }
+
+  playCrystalLineClearEffect(payload = {}) {
+    const layer = this.elements.floatingLayer;
+    const board = this.elements.board;
+    if (!layer || !board || this.fxSuspended) {
+      return { tileCount: 0, particleCount: 0 };
+    }
+    const detailedCells = this.resolveClearedCellDetails(payload);
+    const rowLines = this.resolveLineDetails(payload.clearedRows);
+    const colLines = this.resolveLineDetails(payload.clearedCols);
+    if (!detailedCells.length || (!rowLines.length && !colLines.length)) {
+      return { tileCount: 0, particleCount: 0 };
+    }
+
+    const lines = [
+      ...rowLines.map((line) => ({ ...line, axis: "row" })),
+      ...colLines.map((line) => ({ ...line, axis: "col" })),
+    ].slice(0, 3);
+    const comboTier = Math.max(1, Math.min(3, Math.floor(Number(payload.comboChain) || 1)));
+    const particlesPerCell = 3;
+    const boardRect = board.getBoundingClientRect();
+    const layerRect = layer.getBoundingClientRect();
+    const cellSize = boardRect.width / this.boardSize;
+    const lineMetaByCell = new Map();
+
+    lines.forEach((line, lineOrder) => {
+      const delayMs = lineOrder * 40;
+      if (line.axis === "row") {
+        for (let col = 0; col < this.boardSize; col += 1) {
+          const key = this.cellKey(Number(line.index), col);
+          const current = lineMetaByCell.get(key);
+          if (!current || delayMs < current.delayMs) {
+            lineMetaByCell.set(key, { delayMs, axis: "row" });
+          }
+        }
+      } else {
+        for (let row = 0; row < this.boardSize; row += 1) {
+          const key = this.cellKey(row, Number(line.index));
+          const current = lineMetaByCell.get(key);
+          if (!current || delayMs < current.delayMs) {
+            lineMetaByCell.set(key, { delayMs, axis: "col" });
+          }
+        }
+      }
+    });
+
+    let tileCount = 0;
+    let particleCount = 0;
+    detailedCells.slice(0, 24).forEach(({ row, col, tone }) => {
+      const key = this.cellKey(row, col);
+      const lineMeta = lineMetaByCell.get(key);
+      if (!lineMeta) {
+        return;
+      }
+      const { delayMs, axis } = lineMeta;
+      const vfx = this.getToneVfx(tone);
+      const tile = this.acquireLineClearTile(comboTier);
+      const spriteUrl = this.resolveCellSpriteUrl(row, col, tone);
+      tile.style.left = `${(boardRect.left - layerRect.left) + (col * cellSize)}px`;
+      tile.style.top = `${(boardRect.top - layerRect.top) + (row * cellSize)}px`;
+      tile.style.width = `${cellSize}px`;
+      tile.style.height = `${cellSize}px`;
+      tile.style.backgroundImage = `url("${spriteUrl}")`;
+      tile.style.setProperty("--line-clear-delay", `${delayMs}ms`);
+      tile.style.setProperty("--line-clear-main", vfx.main);
+      tile.style.setProperty("--line-clear-edge", vfx.edge);
+      layer.appendChild(tile);
+      tileCount += 1;
+
+      let settled = false;
+      const finishTile = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        this.recycleLineClearTile(tile);
+      };
+      tile.addEventListener("animationend", finishTile, { once: true });
+      window.setTimeout(finishTile, delayMs + 320);
+
+      for (let particleIndex = 0; particleIndex < particlesPerCell; particleIndex += 1) {
+        const startX = (col + 0.22 + (Math.random() * 0.56)) * cellSize;
+        const startY = (row + 0.22 + (Math.random() * 0.56)) * cellSize;
+        const direction = axis === "row"
+          ? (col < (this.boardSize * 0.5) ? -1 : 1)
+          : (row < (this.boardSize * 0.5) ? -1 : 1);
+        const travelSpeed = 0.62 + (Math.random() * 0.48);
+        const crossSpeed = (Math.random() - 0.5) * 0.34;
+        const life = scaleLife(8 + Math.round(Math.random()));
+        const particle = this.acquireLineClearParticle();
+        Object.assign(particle, {
+          x: startX,
+          y: startY,
+          prevX: startX,
+          prevY: startY,
+          vx: axis === "row" ? direction * travelSpeed : crossSpeed,
+          vy: axis === "col" ? direction * travelSpeed : crossSpeed,
+          radius: Math.max(2.2, cellSize * (0.075 + (Math.random() * 0.035))),
+          type: "lineClearParticle",
+          color: particleIndex === 1 ? vfx.edge : vfx.main,
+          alpha: 0.9,
+          baseAlpha: 0.9,
+          gravityScale: 0,
+          drag: 0.96,
+          rotation: (Math.random() - 0.5) * 0.18,
+          rotationSpeedDeg: (Math.random() - 0.5) * 2.4,
+          turbulenceAmp: 0,
+          turbulenceFreq: 0,
+          turbulencePhase: 0,
+          turbulenceDir: 0,
+          fadePower: 1.35,
+          life,
+          maxLife: life,
+          trail: [],
+          delayFrames: Math.round((delayMs + 105) / 16.67),
+        });
+        this.pushFxParticle(particle);
+        particleCount += 1;
+      }
+    });
+    this.startFxLoop();
+    return { tileCount, particleCount };
   }
 
   playPlacementFeedback(placedCells) {
@@ -3119,7 +3459,7 @@ export class UIManager {
   }
 
   playComboFeedback(comboChain) {
-    if (!comboChain || comboChain < 2) {
+    if (this.boardFrameFxDisabled || !comboChain || comboChain < 2) {
       return;
     }
     const tier = Math.min(3, Math.max(1, comboChain - 1));
@@ -3134,7 +3474,146 @@ export class UIManager {
     }, tierCfg.shellMs);
   }
 
+  playBoardFrameReaction({ type = "clear", comboChain = 1, lineCount = 1 } = {}) {
+    const boardWrap = this.elements.boardWrap;
+    if (!boardWrap || this.boardFrameFxDisabled) {
+      return;
+    }
+    const chain = Math.max(1, Math.floor(Number(comboChain) || 1));
+    const lines = Math.max(1, Math.floor(Number(lineCount) || 1));
+    const resolvedType = type === "combo"
+      ? (chain >= 5 ? "overdrive" : (chain >= 3 ? "combo-strong" : "combo"))
+      : (type === "multi" || lines >= 2 ? "multi" : "clear");
+    const durationMs = resolvedType === "overdrive"
+      ? 980
+      : (resolvedType === "combo-strong" ? 900 : (resolvedType === "combo" ? 820 : (resolvedType === "multi" ? 760 : 640)));
+    const tailMs = durationMs + 180;
+    const comboSparkBoost = type === "combo" ? Math.min(14, Math.max(0, chain - 1) * 4) : 0;
+    const clearSparkBoost = resolvedType === "clear" ? 2 : (resolvedType === "multi" ? 5 : 0);
+    const intensity = Math.min(7, Math.max(lines, chain) + (resolvedType === "clear" ? 1 : 0));
+    const root = document.createElement("div");
+    root.className = `board-frame-reaction board-frame-reaction--${resolvedType}`;
+    root.setAttribute("aria-hidden", "true");
+    root.style.setProperty("--frame-ms", `${durationMs}ms`);
+    root.style.setProperty("--frame-tail-ms", `${tailMs}ms`);
+    root.style.setProperty("--frame-strength", String(intensity));
+
+    const isLightProfile = Boolean(this.fxProfile?.lowPower || this.fxProfile?.isIOS);
+    const sparkleCount = Math.min(
+      isLightProfile ? 18 : 34,
+      Math.max(
+        isLightProfile ? 7 : 10,
+        7 + lines + Math.ceil(chain * 0.8) + comboSparkBoost + clearSparkBoost,
+      ),
+    );
+    for (let i = 0; i < sparkleCount; i += 1) {
+      const spark = document.createElement("span");
+      spark.className = "board-frame-reaction__spark";
+      const edge = i % 4;
+      const pos = 5 + (Math.random() * 90);
+      const drift = 26 + (Math.random() * (resolvedType === "overdrive" ? 54 : 38));
+      const tangent = (Math.random() - 0.5) * 30;
+      const size = (isLightProfile ? 4.2 : 4.8) + (Math.random() * (resolvedType === "clear" ? 3.8 : 5.2));
+      if (edge === 0) {
+        spark.style.left = `${pos}%`;
+        spark.style.top = "0%";
+        spark.style.setProperty("--spark-x", `${tangent}px`);
+        spark.style.setProperty("--spark-y", `${-drift}px`);
+      } else if (edge === 1) {
+        spark.style.left = "100%";
+        spark.style.top = `${pos}%`;
+        spark.style.setProperty("--spark-x", `${drift}px`);
+        spark.style.setProperty("--spark-y", `${tangent}px`);
+      } else if (edge === 2) {
+        spark.style.left = `${pos}%`;
+        spark.style.top = "100%";
+        spark.style.setProperty("--spark-x", `${tangent}px`);
+        spark.style.setProperty("--spark-y", `${drift}px`);
+      } else {
+        spark.style.left = "0%";
+        spark.style.top = `${pos}%`;
+        spark.style.setProperty("--spark-x", `${-drift}px`);
+        spark.style.setProperty("--spark-y", `${tangent}px`);
+      }
+      spark.style.setProperty("--spark-size", `${size.toFixed(1)}px`);
+      spark.style.setProperty("--spark-delay", `${Math.random() * 170}ms`);
+      root.appendChild(spark);
+    }
+
+    boardWrap.appendChild(root);
+    window.setTimeout(() => {
+      root.remove();
+    }, tailMs + 260);
+  }
+
+  spawnBoardEdgeComboBurst({ comboChain = 2, lineCount = 1 } = {}) {
+    const boardWrap = this.elements.boardWrap;
+    if (!boardWrap || this.boardFrameFxDisabled) {
+      return;
+    }
+    const tier = Math.min(3, Math.max(1, Math.floor(Number(comboChain) || 2) - 1));
+    const root = document.createElement("div");
+    root.className = `board-edge-burst board-edge-burst--tier-${tier}`;
+    root.setAttribute("aria-hidden", "true");
+
+    ["top", "right", "bottom", "left"].forEach((edge) => {
+      const beam = document.createElement("span");
+      beam.className = `board-edge-burst__beam board-edge-burst__beam--${edge}`;
+      root.appendChild(beam);
+    });
+
+    const isLightProfile = Boolean(this.fxProfile?.lowPower || this.fxProfile?.isIOS);
+    const particleCount = Math.max(
+      isLightProfile ? 8 : 14,
+      Math.min(isLightProfile ? 14 : 24, 7 + lineCount + (tier * 4)),
+    );
+    for (let i = 0; i < particleCount; i += 1) {
+      const particle = document.createElement("span");
+      particle.className = "board-edge-burst__spark";
+      const edge = i % 4;
+      const pos = 8 + (Math.random() * 84);
+      const drift = 16 + (Math.random() * (tier >= 3 ? 34 : 24));
+      const size = 4 + (Math.random() * (tier >= 3 ? 6 : 4));
+      const hueShift = Math.random() > 0.5 ? "#ff4df3" : "#45e9ff";
+      if (edge === 0) {
+        particle.style.left = `${pos}%`;
+        particle.style.top = "0%";
+        particle.style.setProperty("--spark-x", `${(Math.random() - 0.5) * 22}px`);
+        particle.style.setProperty("--spark-y", `${-drift}px`);
+      } else if (edge === 1) {
+        particle.style.left = "100%";
+        particle.style.top = `${pos}%`;
+        particle.style.setProperty("--spark-x", `${drift}px`);
+        particle.style.setProperty("--spark-y", `${(Math.random() - 0.5) * 22}px`);
+      } else if (edge === 2) {
+        particle.style.left = `${pos}%`;
+        particle.style.top = "100%";
+        particle.style.setProperty("--spark-x", `${(Math.random() - 0.5) * 22}px`);
+        particle.style.setProperty("--spark-y", `${drift}px`);
+      } else {
+        particle.style.left = "0%";
+        particle.style.top = `${pos}%`;
+        particle.style.setProperty("--spark-x", `${-drift}px`);
+        particle.style.setProperty("--spark-y", `${(Math.random() - 0.5) * 22}px`);
+      }
+      particle.style.setProperty("--spark-size", `${size}px`);
+      particle.style.setProperty("--spark-color", hueShift);
+      particle.style.setProperty("--spark-delay", `${Math.random() * 90}ms`);
+      root.appendChild(particle);
+    }
+
+    boardWrap.appendChild(root);
+    window.setTimeout(() => {
+      root.remove();
+    }, 760);
+  }
+
   playComboAccent(payload) {
+    // The isolated performance mode keeps only the COMBO word/audio handled by
+    // main.js; all board-wide combo rings, flashes and edge effects stay off.
+    if (this.boardFrameFxDisabled) {
+      return;
+    }
     const comboChain = Math.max(2, payload?.comboChain ?? 2);
     const lineCount = Math.max(1, payload?.lineCount ?? 1);
     const rowLines = this.resolveLineDetails(payload?.clearedRows);
@@ -3149,13 +3628,18 @@ export class UIManager {
     const accentLife = scaleLife(16 + (tier * 5));
     const accentMs = tierCfg.accentMs;
 
-    this.elements.boardWrap.style.setProperty("--combo-accent-glow-a", tierCfg.shellGlowA);
-    this.elements.boardWrap.style.setProperty("--combo-accent-glow-b", tierCfg.shellGlowB);
-    this.elements.boardWrap.style.setProperty("--combo-accent-ms", `${accentMs}ms`);
-    this.restartClassAnimation(this.elements.boardWrap, ["board-wrap--combo-accent"]);
-    setTimeout(() => {
-      this.elements.boardWrap.classList.remove("board-wrap--combo-accent");
-    }, accentMs);
+    this.playBoardFrameReaction({ type: "combo", comboChain, lineCount });
+
+    if (!this.boardFrameFxDisabled) {
+      this.elements.boardWrap.style.setProperty("--combo-accent-glow-a", tierCfg.shellGlowA);
+      this.elements.boardWrap.style.setProperty("--combo-accent-glow-b", tierCfg.shellGlowB);
+      this.elements.boardWrap.style.setProperty("--combo-accent-ms", `${accentMs}ms`);
+      this.restartClassAnimation(this.elements.boardWrap, ["board-wrap--combo-accent"]);
+      setTimeout(() => {
+        this.elements.boardWrap.classList.remove("board-wrap--combo-accent");
+      }, accentMs);
+    }
+    this.spawnBoardEdgeComboBurst({ comboChain, lineCount });
 
     // iOS: keep combo accent visual but skip heavy ring/particle work.
     if (this.fxProfile?.isIOS) {
@@ -3225,7 +3709,8 @@ export class UIManager {
       const angle = (Math.PI * 2 * i) / accentParticleCount;
       const speed = 2.2 + (Math.random() * 1.8) + (tier * 0.35);
       const life = scaleLife(15 + (Math.round(Math.random() * 4)));
-      this.pushFxParticle({
+      const particle = this.acquireClearFxParticle();
+      Object.assign(particle, {
         x: centerX,
         y: centerY,
         prevX: centerX,
@@ -3249,9 +3734,10 @@ export class UIManager {
         turbulenceDir: angle,
         life,
         maxLife: life,
-        trail: [],
+        trail: particle.trail,
         delayFrames: 0,
       });
+      this.pushFxParticle(particle);
     }
 
     // Tier 3 gets a second quick sparkle burst to clearly separate big combos.
@@ -3261,7 +3747,8 @@ export class UIManager {
         const angle = Math.random() * Math.PI * 2;
         const speed = 3.8 + (Math.random() * 2.2);
         const life = scaleLife(11 + Math.round(Math.random() * 3));
-        this.pushFxParticle({
+        const particle = this.acquireClearFxParticle();
+        Object.assign(particle, {
           x: centerX,
           y: centerY,
           prevX: centerX,
@@ -3285,9 +3772,10 @@ export class UIManager {
           turbulenceDir: angle,
           life,
           maxLife: life,
-          trail: [],
+          trail: particle.trail,
           delayFrames: 1,
         });
+        this.pushFxParticle(particle);
       }
     }
 
@@ -3535,7 +4023,7 @@ export class UIManager {
     }, this.tuning.FX.GAME_OVER_VIGNETTE_MS);
   }
 
-  pulseScore() {
+  pulseScore({ scoreDelta = 0, comboChain = 1 } = {}) {
     if (!this.elements.scoreValue) {
       return;
     }
@@ -3545,16 +4033,96 @@ export class UIManager {
     if (this.scoreStagePulseTimer) {
       clearTimeout(this.scoreStagePulseTimer);
     }
-    this.restartClassAnimation(this.elements.scoreValue, ["score-value--pulse"]);
-    this.restartClassAnimation(this.elements.scoreStage, ["score-stage--pulse"]);
+    const safeDelta = Math.max(0, Number(scoreDelta) || 0);
+    const safeChain = Math.max(1, Math.floor(Number(comboChain) || 1));
+    const isStrong = safeDelta >= 250 || safeChain >= 2;
+    const isMega = safeDelta >= 700 || safeChain >= 4;
+    const scoreClasses = ["score-value--pulse"];
+    const stageClasses = ["score-stage--pulse"];
+    if (isStrong) {
+      scoreClasses.push("score-value--score-strong");
+      stageClasses.push("score-stage--score-strong");
+    }
+    if (isMega) {
+      scoreClasses.push("score-value--score-mega");
+      stageClasses.push("score-stage--score-mega");
+    }
+    const pulseMs = isMega ? 580 : (isStrong ? 440 : this.tuning.FX.SCORE_PULSE_MS);
+    this.restartClassAnimation(this.elements.scoreValue, scoreClasses);
+    this.restartClassAnimation(this.elements.scoreStage, stageClasses);
     this.scorePulseTimer = setTimeout(() => {
-      this.elements.scoreValue?.classList.remove("score-value--pulse");
+      this.elements.scoreValue?.classList.remove(
+        "score-value--pulse",
+        "score-value--score-strong",
+        "score-value--score-mega",
+      );
       this.scorePulseTimer = 0;
-    }, this.tuning.FX.SCORE_PULSE_MS);
+    }, pulseMs);
     this.scoreStagePulseTimer = setTimeout(() => {
-      this.elements.scoreStage?.classList.remove("score-stage--pulse");
+      this.elements.scoreStage?.classList.remove(
+        "score-stage--pulse",
+        "score-stage--score-strong",
+        "score-stage--score-mega",
+      );
       this.scoreStagePulseTimer = 0;
-    }, Math.max(this.tuning.FX.SCORE_PULSE_MS + 80, 320));
+    }, Math.max(pulseMs + 80, 320));
+  }
+
+  stopScoreCountAnimation() {
+    if (this.scoreCountRafId) {
+      cancelAnimationFrame(this.scoreCountRafId);
+      this.scoreCountRafId = 0;
+    }
+  }
+
+  renderScoreValue(score, snapshot = {}) {
+    const scoreEl = this.elements.scoreValue;
+    if (!scoreEl) {
+      return;
+    }
+    const targetScore = Math.max(0, Math.floor(Number(score) || 0));
+    const previousScore = Number.isFinite(this.displayedScoreValue)
+      ? this.displayedScoreValue
+      : targetScore;
+    const status = snapshot?.status ?? this.currentStatus;
+    const shouldAnimate =
+      status !== "menu" &&
+      targetScore > previousScore &&
+      targetScore - previousScore >= 2;
+
+    if (!shouldAnimate) {
+      this.stopScoreCountAnimation();
+      this.displayedScoreValue = targetScore;
+      scoreEl.textContent = this.formatScore(targetScore);
+      return;
+    }
+
+    this.stopScoreCountAnimation();
+    const delta = targetScore - previousScore;
+    const comboChain = Math.max(1, Math.floor(Number(snapshot?.comboChain) || 1));
+    const lowPower = Boolean(this.fxProfile?.lowPower || this.fxProfile?.isIOS);
+    const durationMs = Math.min(
+      lowPower ? 420 : 620,
+      Math.max(180, 145 + (Math.log10(delta + 1) * 150) + (comboChain > 1 ? 45 : 0)),
+    );
+    const startedAt = performance.now();
+    this.pulseScore({ scoreDelta: delta, comboChain });
+
+    const tick = (now) => {
+      const progress = Math.min(1, (now - startedAt) / durationMs);
+      const eased = 1 - ((1 - progress) ** 3);
+      const current = Math.round(previousScore + (delta * eased));
+      this.displayedScoreValue = current;
+      scoreEl.textContent = this.formatScore(current);
+      if (progress < 1) {
+        this.scoreCountRafId = requestAnimationFrame(tick);
+        return;
+      }
+      this.scoreCountRafId = 0;
+      this.displayedScoreValue = targetScore;
+      scoreEl.textContent = this.formatScore(targetScore);
+    };
+    this.scoreCountRafId = requestAnimationFrame(tick);
   }
 
   playInvalidDropFeedback(cardEl) {
@@ -3572,7 +4140,14 @@ export class UIManager {
     );
     if (this.fxParticles.length >= budget) {
       const overflow = (this.fxParticles.length - budget) + 1;
-      this.fxParticles.splice(0, Math.max(1, overflow));
+      const removed = this.fxParticles.splice(0, Math.max(1, overflow));
+      removed.forEach((particle) => {
+        if (particle?.type === "lineClearParticle") {
+          this.releaseLineClearParticle(particle);
+        } else if (particle?.clearFxPooled) {
+          this.releaseClearFxParticle(particle);
+        }
+      });
     }
     this.fxParticles.push(particle);
   }
@@ -3694,11 +4269,11 @@ export class UIManager {
     });
   }
 
-  spawnUnityShatterDebris(clearedCells) {
+  spawnUnityShatterDebris(clearedCells, measuredBoardRect = null) {
     if (!Array.isArray(clearedCells) || !clearedCells.length) {
       return;
     }
-    const rect = this.elements.board.getBoundingClientRect();
+    const rect = measuredBoardRect ?? this.elements.board.getBoundingClientRect();
     const cellSize = rect.width / this.boardSize;
     const runtimeScale = this.getFxRuntimeScale();
     const lowPower = Boolean(this.fxProfile.lowPower);
@@ -3737,7 +4312,8 @@ export class UIManager {
         const eject = 1.8 + (Math.random() * 3.1);
         const lift = 1.6 + (Math.random() * 2.1);
         const life = scaleLife(UNITY_SHATTER.baseLife + Math.round(Math.random() * UNITY_SHATTER.lifeVariance));
-        this.fxShards.push({
+        const shard = this.acquireClearFxShard();
+        Object.assign(shard, {
           x: cellLeft + centroid.x,
           y: cellTop + centroid.y,
           vx: (nx * eject * 0.9) + ((Math.random() - 0.5) * 0.8),
@@ -3758,13 +4334,14 @@ export class UIManager {
           fallbackColor: baseColor,
           delayFrames: Math.random() > 0.76 ? 1 : 0,
         });
+        this.fxShards.push(shard);
       }
     }
     this.startFxLoop();
   }
 
-  spawnCanvasExplosion(clearedCells, rowLines = [], colLines = []) {
-    const rect = this.elements.board.getBoundingClientRect();
+  spawnCanvasExplosion(clearedCells, rowLines = [], colLines = [], measuredBoardRect = null) {
+    const rect = measuredBoardRect ?? this.elements.board.getBoundingClientRect();
     const cellSize = rect.width / this.boardSize;
     const lineEnergy = Math.max(1, rowLines.length + colLines.length);
     const runtimeScale = this.getFxRuntimeScale();
@@ -3893,7 +4470,8 @@ export class UIManager {
         const isSparkle = i % 6 === 0;
         const type = roll < 0.24 ? "streak" : (roll < 0.46 ? "chunk" : "dot");
         const chunkSize = 2.2 + (Math.random() * 3.4);
-        this.pushFxParticle({
+        const particle = this.acquireClearFxParticle();
+        Object.assign(particle, {
           x: centerX,
           y: centerY,
           prevX: centerX,
@@ -3919,11 +4497,13 @@ export class UIManager {
           turbulenceFreq: 0.08 + (Math.random() * 0.11),
           turbulencePhase: Math.random() * Math.PI * 2,
           turbulenceDir: Math.random() * Math.PI * 2,
+          fadePower: 2,
           life: scaleLife(30 + Math.round(Math.random() * 14)),
           maxLife: scaleLife(30 + Math.round(Math.random() * 14)),
-          trail: [],
+          trail: particle.trail,
           delayFrames,
         });
+        this.pushFxParticle(particle);
       }
 
       const smokeCount = this.fxProfile.enableSmoke
@@ -3933,7 +4513,8 @@ export class UIManager {
         const smokeAngle = Math.random() * Math.PI * 2;
         const smokeSpeed = 0.35 + (Math.random() * 1.25);
         const smokeLife = scaleLife(28 + Math.round(Math.random() * 16));
-        this.pushFxParticle({
+        const particle = this.acquireClearFxParticle();
+        Object.assign(particle, {
           x: centerX,
           y: centerY,
           prevX: centerX,
@@ -3956,9 +4537,10 @@ export class UIManager {
           growth: 0.16 + (Math.random() * 0.18),
           life: smokeLife,
           maxLife: smokeLife,
-          trail: [],
+          trail: particle.trail,
           delayFrames: delayFrames + Math.round(Math.random() * 3),
         });
+        this.pushFxParticle(particle);
       }
     });
 
@@ -4141,6 +4723,9 @@ export class UIManager {
       shard.alpha = (shard.baseAlpha ?? 1) * Math.pow(lifeT, 1.22);
       if (shard.life <= 0 || shard.y > ((this.elements.board?.clientHeight ?? 0) + 48)) {
         this.fxShards.splice(i, 1);
+        if (shard.clearFxPooled) {
+          this.releaseClearFxShard(shard);
+        }
       }
     }
 
@@ -4205,6 +4790,11 @@ export class UIManager {
       }
       if (particle.life <= 0) {
         this.fxParticles.splice(i, 1);
+        if (particle.type === "lineClearParticle") {
+          this.releaseLineClearParticle(particle);
+        } else if (particle.clearFxPooled) {
+          this.releaseClearFxParticle(particle);
+        }
       }
     }
 
@@ -4264,7 +4854,8 @@ export class UIManager {
       for (let j = 0; j < afterburstCount; j += 1) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 8 + (Math.random() * 2);
-        this.pushFxParticle({
+        const particle = this.acquireClearFxParticle();
+        Object.assign(particle, {
           x: burst.x,
           y: burst.y,
           prevX: burst.x,
@@ -4275,15 +4866,22 @@ export class UIManager {
           type: "dot",
           color: Math.random() > 0.5 ? "#ffffff" : "#fbbf24",
           alpha: 0.96,
+          baseAlpha: 0.96,
           gravityScale: 0.56,
           drag: 0.986,
           rotation: 0,
           rotationSpeedDeg: 0,
+          turbulenceAmp: 0,
+          turbulenceFreq: 0,
+          turbulencePhase: 0,
+          turbulenceDir: 0,
+          fadePower: 2,
           maxLife: scaleLife(20),
           life: scaleLife(20),
-          trail: [],
+          trail: particle.trail,
           delayFrames: 0,
         });
+        this.pushFxParticle(particle);
       }
       this.fxAfterbursts.splice(i, 1);
     }
@@ -4634,7 +5232,7 @@ export class UIManager {
           ctx.moveTo(particle.x, particle.y);
           ctx.lineTo(particle.x - tx, particle.y - ty);
           ctx.stroke();
-        } else if (particle.type === "chunk") {
+        } else if (particle.type === "chunk" || particle.type === "lineClearParticle") {
           const size = particle.radius * glowScales[g];
           ctx.translate(particle.x, particle.y);
           ctx.rotate(particle.rotation ?? 0);
@@ -4692,6 +5290,13 @@ export class UIManager {
           ctx.lineTo(particle.x - tx, particle.y - ty);
           ctx.stroke();
         }
+      } else if (particle.type === "lineClearParticle") {
+        const size = particle.radius * Math.max(0.18, Math.pow(lifeT, 0.72));
+        ctx.translate(particle.x, particle.y);
+        ctx.rotate(particle.rotation ?? 0);
+        ctx.fillStyle = particle.color;
+        ctx.shadowBlur = 0;
+        ctx.fillRect(-size * 0.5, -size * 0.5, size, size);
       } else if (particle.type === "chunk") {
         const size = particle.radius;
         ctx.translate(particle.x, particle.y);
@@ -4919,35 +5524,40 @@ export class UIManager {
     this.startFxLoop();
   }
 
-  paintLineDominant(axis, index, tone) {
-    const vfx = this.getToneVfx(tone);
-    const targets = [];
-    if (axis === "row") {
+  paintLineDominantLines(rowLines = [], colLines = [], alreadyPainted = new Set()) {
+    const toneByCell = new Map();
+    rowLines.forEach(({ index, tone }) => {
       for (let col = 0; col < this.boardSize; col += 1) {
-        const cell = this.cells.get(this.cellKey(index, col));
-        if (cell) {
-          targets.push(cell);
-        }
+        toneByCell.set(this.cellKey(index, col), tone);
       }
-    } else {
+    });
+    colLines.forEach(({ index, tone }) => {
       for (let row = 0; row < this.boardSize; row += 1) {
-        const cell = this.cells.get(this.cellKey(row, index));
-        if (cell) {
-          targets.push(cell);
-        }
+        toneByCell.set(this.cellKey(row, index), tone);
       }
-    }
+    });
 
-    targets.forEach((cell) => {
+    const targets = [];
+    toneByCell.forEach((tone, key) => {
+      const cell = this.cells.get(key);
+      if (!cell || alreadyPainted.has(cell)) {
+        return;
+      }
+      const vfx = this.getToneVfx(tone);
       cell.style.setProperty("--clear-glow", vfx.main);
       cell.style.setProperty("--clear-accent", vfx.accent);
       cell.classList.add("cell--line-dominant");
-      setTimeout(() => {
-        cell.classList.remove("cell--line-dominant");
-        cell.style.removeProperty("--clear-glow");
-        cell.style.removeProperty("--clear-accent");
-      }, this.tuning.FX.CLEAR_FLASH_MS + 120);
+      targets.push(cell);
     });
+    if (targets.length) {
+      setTimeout(() => {
+        targets.forEach((cell) => {
+          cell.classList.remove("cell--line-dominant");
+          cell.style.removeProperty("--clear-glow");
+          cell.style.removeProperty("--clear-accent");
+        });
+      }, this.tuning.FX.CLEAR_FLASH_MS + 120);
+    }
   }
 
   resolveClearedCellDetails(payload) {
@@ -5721,13 +6331,13 @@ export class UIManager {
     this.startFxLoop();
   }
 
-  spawnLineScorePopups(rowLines, colLines, comboChain) {
+  spawnLineScorePopups(rowLines, colLines, comboChain, measuredBoardRect = null) {
     const boardEl = this.elements.board;
     if (!boardEl) {
       return;
     }
 
-    const rect = boardEl.getBoundingClientRect();
+    const rect = measuredBoardRect ?? boardEl.getBoundingClientRect();
     const cellSize = rect.width / this.boardSize;
     const isCombo = comboChain > 1;
     const text = isCombo ? (comboChain >= 3 ? "+500" : "+250") : "+100";
@@ -5768,9 +6378,7 @@ export class UIManager {
     const score = Number.isFinite(snapshot.score) ? snapshot.score : 0;
     const bestScore = Number.isFinite(snapshot.bestScore) ? snapshot.bestScore : 0;
 
-    if (this.elements.scoreValue) {
-      this.elements.scoreValue.textContent = this.formatScore(score);
-    }
+    this.renderScoreValue(score, snapshot);
     if (this.elements.bestValue) {
       this.elements.bestValue.textContent = this.formatScore(bestScore);
     }
@@ -7100,30 +7708,6 @@ export class UIManager {
   }
 
   renderOverlays(status, score, weeklyTop, snapshot, previousStatus = this.currentStatus) {
-    if (status !== "over") {
-      if (this.noSpaceBannerTimer) {
-        clearTimeout(this.noSpaceBannerTimer);
-        this.noSpaceBannerTimer = 0;
-      }
-      this.noSpaceBannerVisible = false;
-      this.noSpaceGameOverGateActive = false;
-    } else if (previousStatus !== "over" && !this.noSpaceGameOverGateActive) {
-      if (this.noSpaceBannerTimer) {
-        clearTimeout(this.noSpaceBannerTimer);
-      }
-      this.noSpaceBannerVisible = true;
-      this.noSpaceGameOverGateActive = true;
-      this.noSpaceBannerTimer = window.setTimeout(() => {
-        this.noSpaceBannerTimer = 0;
-        this.noSpaceBannerVisible = false;
-        this.noSpaceGameOverGateActive = false;
-        if (this.currentStatus === "over") {
-          this.toggleOverlay(this.elements.noSpaceBanner, false);
-          this.toggleOverlay(this.elements.gameOverModal, true);
-        }
-      }, this.noSpaceBannerDurationMs);
-    }
-
     if (
       this.menuBadgesViewOpen &&
       (
@@ -7177,13 +7761,12 @@ export class UIManager {
       !this.milestoneUnlockPanel.visible;
     this.toggleOverlay(this.elements.adventureCompleteModal, shouldShowAdventureComplete);
     this.toggleOverlay(this.elements.milestoneUnlockModal, this.milestoneUnlockPanel.visible);
-    this.toggleOverlay(this.elements.noSpaceBanner, status === "over" && this.noSpaceBannerVisible);
-    this.toggleOverlay(this.elements.gameOverModal, status === "over" && !this.noSpaceGameOverGateActive);
+    this.toggleOverlay(this.elements.gameOverModal, status === "over");
     this.toggleOverlay(this.elements.badgeUnlockModal, this.badgeUnlockPanel.visible);
     if (shouldDeferAdventureComplete) {
       const level = Math.max(1, Math.min(100, Math.floor(Number(snapshot?.adventure?.level) || 1)));
       this.deferredAdventureComplete = {
-        title: `Level ${level}`,
+        title: t("level_label", { level }),
         score: this.formatScore(score),
         level,
       };
@@ -7191,9 +7774,8 @@ export class UIManager {
       const level =
         this.deferredAdventureComplete?.level ??
         Math.max(1, Math.min(100, Math.floor(Number(snapshot?.adventure?.level) || 1)));
-      const title = this.deferredAdventureComplete?.title ?? `Level ${level}`;
       if (this.elements.adventureCompleteTitle) {
-        this.elements.adventureCompleteTitle.textContent = `${title} Completed`;
+        this.elements.adventureCompleteTitle.textContent = t("level_completed_title", { level });
       }
       if (this.elements.adventureCompleteScore) {
         this.elements.adventureCompleteScore.textContent =
@@ -7225,7 +7807,9 @@ export class UIManager {
       return;
     }
     if (this.elements.adventureCompleteTitle) {
-      this.elements.adventureCompleteTitle.textContent = `${this.deferredAdventureComplete.title} Completed`;
+      this.elements.adventureCompleteTitle.textContent = t("level_completed_title", {
+        level: this.deferredAdventureComplete.level ?? 1,
+      });
     }
     if (this.elements.adventureCompleteScore) {
       this.elements.adventureCompleteScore.textContent = this.deferredAdventureComplete.score;
@@ -7241,7 +7825,7 @@ export class UIManager {
     }
     const percent = this.estimateJourneyReachPercent(level);
     this.elements.adventureCompleteReach.textContent =
-      `Only ${percent}% of players made it this far`;
+      t("only_players_reached", { percent });
   }
 
   estimateJourneyReachPercent(level = 1) {
@@ -7268,11 +7852,13 @@ export class UIManager {
   openAdventureCompletePreview({
     level = 4,
     score = 476,
-    title = "Level 4",
   } = {}) {
     const safeLevel = Math.max(1, Math.min(100, Math.floor(Number(level) || 1)));
     if (this.elements.adventureCompleteTitle) {
-      this.elements.adventureCompleteTitle.textContent = `${title} Completed`;
+      const chosenLevel = Number.isFinite(Number(level))
+        ? Math.max(1, Math.floor(Number(level)))
+        : safeLevel;
+      this.elements.adventureCompleteTitle.textContent = t("level_completed_title", { level: chosenLevel });
     }
     if (this.elements.adventureCompleteScore) {
       this.elements.adventureCompleteScore.textContent = this.formatScore(score);
@@ -7298,19 +7884,19 @@ export class UIManager {
     this.milestoneUnlockPanel.unlockedColor = unlockedColor;
 
     if (this.elements.milestoneUnlockTitle) {
-      this.elements.milestoneUnlockTitle.textContent = `Level ${safeCompletedLevel} Complete`;
+      this.elements.milestoneUnlockTitle.textContent = t("level_complete_short", { level: safeCompletedLevel });
     }
     if (this.elements.milestoneUnlockText) {
       this.elements.milestoneUnlockText.textContent =
         safeNextLevel > safeCompletedLevel
-          ? `Ruby Red blocks are now active from Level ${safeNextLevel}.`
-          : "Ruby Red blocks are now active in upcoming Journey levels.";
+          ? t("ruby_unlocked_from_level", { level: safeNextLevel })
+          : t("ruby_unlocked_upcoming");
     }
     if (this.elements.milestoneUnlockContinueBtn) {
       this.elements.milestoneUnlockContinueBtn.textContent =
         safeNextLevel > safeCompletedLevel
-          ? `Start Level ${safeNextLevel}`
-          : "Continue";
+          ? t("start_level", { level: safeNextLevel })
+          : t("continue");
     }
 
     this.toggleOverlay(this.elements.adventureCompleteModal, false);
@@ -7336,7 +7922,6 @@ export class UIManager {
   }
 
   formatScore(value) {
-    return Math.max(0, Math.floor(value)).toLocaleString("en-US");
+    return formatScoreByLocale(value);
   }
 }
-

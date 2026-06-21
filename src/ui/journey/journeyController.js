@@ -1,3 +1,5 @@
+import { t } from "../localization.js";
+
 const JOURNEY_ROW_RANGES = [
   [92, 100],
   [81, 91],
@@ -165,7 +167,7 @@ export class JourneyController {
   renderJourneyPanel() {
     this.renderJourneyMap();
     if (this.elements.startLabel) {
-      this.elements.startLabel.textContent = `Level ${this.panelState.selectedLevel}`;
+      this.elements.startLabel.textContent = t("level_label", { level: this.panelState.selectedLevel });
     }
     if (this.elements.startBtn) {
       const selectedState = this.resolveJourneyLevelState(this.panelState.selectedLevel);

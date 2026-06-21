@@ -59,10 +59,14 @@ export function createAdMobService(options = {}) {
   let listenersBound = false;
   let bannerVisible = false;
   let bannerShownOnce = false;
+  let bannerRetryTimerId = 0;
+  let bannerRetryAttempts = 0;
   let interstitialReady = false;
   let rewardedReady = false;
   let interstitialPreparing = false;
   let rewardedPreparing = false;
+  let interstitialShowPromise = null;
+  let rewardedShowPromise = null;
   let lastInterstitialShownAtMs = 0;
   let admobPlugin = null;
 
@@ -71,12 +75,14 @@ export function createAdMobService(options = {}) {
   const INTERSTITIAL_EVENTS = {
     Loaded: "interstitialAdLoaded",
     FailedToLoad: "interstitialAdFailedToLoad",
+    Showed: "interstitialAdShowed",
     Dismissed: "interstitialAdDismissed",
     FailedToShow: "interstitialAdFailedToShow",
   };
   const REWARDED_EVENTS = {
     Loaded: "onRewardedVideoAdLoaded",
     FailedToLoad: "onRewardedVideoAdFailedToLoad",
+    Showed: "onRewardedVideoAdShowed",
     Rewarded: "onRewardedVideoAdReward",
     Dismissed: "onRewardedVideoAdDismissed",
     FailedToShow: "onRewardedVideoAdFailedToShow",
@@ -233,6 +239,21 @@ export function createAdMobService(options = {}) {
     return initPromise;
   };
 
+  const scheduleBannerRetry = () => {
+    if (bannerRetryTimerId) {
+      return;
+    }
+    const attempt = Math.max(0, bannerRetryAttempts);
+    const delayMs = Math.min(10000, 1000 * (2 ** attempt));
+    bannerRetryAttempts = Math.min(attempt + 1, 4);
+    bannerRetryTimerId = window.setTimeout(() => {
+      bannerRetryTimerId = 0;
+      if (!bannerVisible) {
+        void setBannerVisible(true);
+      }
+    }, delayMs);
+  };
+
   const setBannerVisible = async (visible) => {
     if (!configured) {
       return false;
@@ -247,6 +268,7 @@ export function createAdMobService(options = {}) {
     }
     if (visible) {
       if (bannerVisible) {
+        bannerRetryAttempts = 0;
         return true;
       }
       try {
@@ -263,17 +285,30 @@ export function createAdMobService(options = {}) {
           bannerShownOnce = true;
         }
         bannerVisible = true;
+        bannerRetryAttempts = 0;
+        if (bannerRetryTimerId) {
+          window.clearTimeout(bannerRetryTimerId);
+          bannerRetryTimerId = 0;
+        }
         return true;
       } catch {
+        bannerVisible = false;
+        scheduleBannerRetry();
         return false;
       }
     }
+    if (bannerRetryTimerId) {
+      window.clearTimeout(bannerRetryTimerId);
+      bannerRetryTimerId = 0;
+    }
     if (!bannerVisible) {
+      bannerRetryAttempts = 0;
       return true;
     }
     try {
       await plugin.hideBanner();
       bannerVisible = false;
+      bannerRetryAttempts = 0;
       return true;
     } catch {
       return false;
@@ -295,9 +330,17 @@ export function createAdMobService(options = {}) {
     }
     bannerVisible = false;
     bannerShownOnce = false;
+    if (bannerRetryTimerId) {
+      window.clearTimeout(bannerRetryTimerId);
+      bannerRetryTimerId = 0;
+    }
+    bannerRetryAttempts = 0;
   };
 
   const showInterstitial = async () => {
+    if (interstitialShowPromise) {
+      return interstitialShowPromise;
+    }
     if (!configured) {
       return false;
     }
@@ -319,19 +362,50 @@ export function createAdMobService(options = {}) {
         return false;
       }
     }
-    try {
-      await plugin.showInterstitial();
-      lastInterstitialShownAtMs = Date.now();
-      interstitialReady = false;
-      return true;
-    } catch {
-      interstitialReady = false;
-      void prepareInterstitial();
-      return false;
-    }
+    interstitialShowPromise = new Promise(async (resolve) => {
+      const listenerHandles = [];
+      let settled = false;
+      let shown = false;
+      let timeoutId = 0;
+      const finish = (result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+        void Promise.allSettled(listenerHandles.map((handle) => handle?.remove?.())).finally(() => {
+          resolve(Boolean(result));
+        });
+      };
+      try {
+        listenerHandles.push(
+          await plugin.addListener(INTERSTITIAL_EVENTS.Showed, () => {
+            shown = true;
+          }),
+          await plugin.addListener(INTERSTITIAL_EVENTS.Dismissed, () => finish(true)),
+          await plugin.addListener(INTERSTITIAL_EVENTS.FailedToShow, () => finish(false)),
+        );
+        timeoutId = window.setTimeout(() => finish(shown), 150000);
+        await plugin.showInterstitial();
+        shown = true;
+        lastInterstitialShownAtMs = Date.now();
+        interstitialReady = false;
+      } catch {
+        interstitialReady = false;
+        finish(false);
+      }
+    }).finally(() => {
+      interstitialShowPromise = null;
+    });
+    return interstitialShowPromise;
   };
 
   const showRewarded = async () => {
+    if (rewardedShowPromise) {
+      return rewardedShowPromise;
+    }
     if (!configured) {
       return { shown: false, rewarded: false };
     }
@@ -349,25 +423,59 @@ export function createAdMobService(options = {}) {
         return { shown: false, rewarded: false };
       }
     }
-    let rewarded = false;
-    let rewardListener = null;
-    try {
-      rewardListener = await plugin.addListener(REWARDED_EVENTS.Rewarded, () => {
-        rewarded = true;
-      });
-      await plugin.showRewardVideoAd();
-      return { shown: true, rewarded };
-    } catch {
-      return { shown: false, rewarded: false };
-    } finally {
+    rewardedShowPromise = new Promise(async (resolve) => {
+      const listenerHandles = [];
+      let settled = false;
+      let shown = false;
+      let rewarded = false;
+      let timeoutId = 0;
+      const finish = (result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+        void Promise.allSettled(listenerHandles.map((handle) => handle?.remove?.())).finally(() => {
+          resolve(result);
+        });
+      };
       try {
-        await rewardListener?.remove?.();
+        listenerHandles.push(
+          await plugin.addListener(REWARDED_EVENTS.Showed, () => {
+            shown = true;
+          }),
+          await plugin.addListener(REWARDED_EVENTS.Rewarded, () => {
+            rewarded = true;
+          }),
+          await plugin.addListener(REWARDED_EVENTS.Dismissed, () => {
+            finish({ shown: true, rewarded });
+          }),
+          await plugin.addListener(REWARDED_EVENTS.FailedToShow, () => {
+            finish({ shown: false, rewarded: false });
+          }),
+        );
+        timeoutId = window.setTimeout(() => {
+          finish({ shown, rewarded });
+        }, 150000);
+        void plugin.showRewardVideoAd().then((rewardItem) => {
+          shown = true;
+          if (rewardItem && typeof rewardItem === "object") {
+            rewarded = true;
+          }
+        }).catch(() => {
+          finish({ shown: false, rewarded: false });
+        });
       } catch {
-        // no-op
+        finish({ shown: false, rewarded: false });
       }
+    }).finally(() => {
       rewardedReady = false;
+      rewardedShowPromise = null;
       void prepareRewarded();
-    }
+    });
+    return rewardedShowPromise;
   };
 
   return {

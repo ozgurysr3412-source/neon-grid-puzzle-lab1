@@ -9,10 +9,15 @@
     "assets:optimize:runtime": "node scripts/optimize-runtime-assets.mjs",
     "assets:restore:runtime": "node scripts/restore-runtime-assets.mjs",
     "android:add": "npx cap add android",
-    "android:sync": "npm run build:web && npx cap sync android",
+    "android:prepare": "node scripts/prepare-android-build.mjs",
+    "android:sync": "npm run build:web && npx cap sync android && npm run android:prepare",
     "android:open": "npx cap open android",
     "android:apk:debug": "cd android && gradlew.bat assembleDebug",
     "test:smoke": "node scripts/smoke-sim.mjs",
+    "test:stage1": "node scripts/test-stage1-ad-flow.mjs",
+    "test:stage2:messages": "node scripts/test-stage2-message-policy.mjs",
+    "test:stage2:clear-perf": "node scripts/test-stage2-clear-performance.mjs",
+    "test:stage2:theme": "node scripts/test-stage2-score-theme.mjs",
     "analyze:cookiecats": "node scripts/analyze-cookie-cats.mjs",
     "test:bestbadge": "node scripts/test-best-badge.mjs"
   },
@@ -26,6 +31,7 @@
   },
   "dependencies": {
     "@capacitor-community/admob": "^7.2.0",
+    "@capacitor-community/in-app-review": "^7.1.0",
     "@capacitor/local-notifications": "^7.0.6"
   }
 }

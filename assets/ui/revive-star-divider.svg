@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="48" viewBox="0 0 300 48" fill="none">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#FFD96A" stop-opacity="0.55"/>
+      <stop offset="52%" stop-color="#FFB627" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#FFB627" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="star" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF4B7"/>
+      <stop offset="42%" stop-color="#FFD84E"/>
+      <stop offset="100%" stop-color="#FF9D22"/>
+    </linearGradient>
+    <filter id="softShadow" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#5B225A" flood-opacity="0.45"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#FFD35B" flood-opacity="0.4"/>
+    </filter>
+    <symbol id="spark" viewBox="0 0 40 40">
+      <path d="M20 0C22.2 12.2 27.8 17.8 40 20C27.8 22.2 22.2 27.8 20 40C17.8 27.8 12.2 22.2 0 20C12.2 17.8 17.8 12.2 20 0Z" fill="url(#star)"/>
+      <path d="M20 4.5C21.7 13.6 26.4 18.3 35.5 20C26.4 21.7 21.7 26.4 20 35.5C18.3 26.4 13.6 21.7 4.5 20C13.6 18.3 18.3 13.6 20 4.5Z" fill="#FFEFB0" opacity="0.28"/>
+    </symbol>
+  </defs>
+  <path d="M18 24H112" stroke="url(#star)" stroke-width="2" stroke-linecap="round" opacity="0.45"/>
+  <path d="M188 24H282" stroke="url(#star)" stroke-width="2" stroke-linecap="round" opacity="0.45"/>
+  <path d="M26 24H110" stroke="#B076FF" stroke-width="5" stroke-linecap="round" opacity="0.12"/>
+  <path d="M190 24H274" stroke="#B076FF" stroke-width="5" stroke-linecap="round" opacity="0.12"/>
+  <circle cx="150" cy="24" r="30" fill="url(#glow)"/>
+  <use href="#spark" x="130" y="4" width="40" height="40" filter="url(#softShadow)"/>
+  <use href="#spark" x="101" y="13" width="22" height="22" opacity="0.92" filter="url(#softShadow)"/>
+  <use href="#spark" x="74" y="17" width="14" height="14" opacity="0.78" filter="url(#softShadow)"/>
+  <use href="#spark" x="177" y="13" width="22" height="22" opacity="0.92" filter="url(#softShadow)"/>
+  <use href="#spark" x="212" y="17" width="14" height="14" opacity="0.78" filter="url(#softShadow)"/>
+</svg>

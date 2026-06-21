@@ -85,7 +85,7 @@ const STRINGS = Object.freeze({
     player_name: "Player name",
     country: "Country",
     identity_lock_note: "You can not change this later.",
-    no_space_left: "No space left",
+    no_space_left: "No Space Left",
     badge_unlocked: "Badge Unlocked",
     reason: "Reason",
     awesome: "Awesome",
@@ -103,6 +103,10 @@ const STRINGS = Object.freeze({
     rewarded_not_completed: "Reward was not completed.",
     continue_unavailable: "Continue unavailable on this board. Try again.",
     ads_removed_note: "Ads removed. Rewarded ads remain optional.",
+    update_available: "New Update Available",
+    update_message: "Update Grid Crown for the latest improvements and the best game experience.",
+    update_now: "Update",
+    update_later: "Later",
   }),
   tr: Object.freeze({
     score: "Skor",
@@ -188,7 +192,7 @@ const STRINGS = Object.freeze({
     player_name: "Oyuncu adı",
     country: "Ülke",
     identity_lock_note: "Bu seçim daha sonra değiştirilemez.",
-    no_space_left: "Boş alan kalmadı",
+    no_space_left: "No Space Left",
     badge_unlocked: "Rozet Açıldı",
     reason: "Neden",
     awesome: "Harika",
@@ -206,6 +210,10 @@ const STRINGS = Object.freeze({
     rewarded_not_completed: "Ödül tamamlanmadı.",
     continue_unavailable: "Bu tabloda devam kullanılamıyor. Tekrar dene.",
     ads_removed_note: "Reklamlar kaldırıldı. Ödüllü reklamlar isteğe bağlı olarak kalır.",
+    update_available: "Yeni Güncelleme Hazır",
+    update_message: "En yeni iyileştirmeler ve en iyi oyun deneyimi için Grid Crown'u güncelle.",
+    update_now: "Güncelle",
+    update_later: "Daha Sonra",
   }),
 });
 
@@ -300,7 +308,6 @@ export function applyStaticTranslations() {
   setIndexedText(".gameover-btn-label", 0, "play_again");
   setIndexedText(".gameover-btn-label", 1, "home");
   setText(".gameover-continue-text", "watch_ad_continue");
-  setText("#no-space-banner", "no_space_left");
   setText(".level-complete-kicker", "level_complete");
   setText("#adventure-next-btn", "next_level");
   setText("#adventure-replay-btn", "replay_level");
@@ -318,6 +325,10 @@ export function applyStaticTranslations() {
   setAttr("#menu-badge-detail-close", "aria-label", "close");
   setAttr("#badge-unlock-backdrop", "aria-label", "close_badge_popup");
   setAttr("#remove-ads-backdrop", "aria-label", "close_remove_ads_popup");
+  setText("#soft-update-title", "update_available");
+  setText("#soft-update-message", "update_message");
+  setText("#soft-update-open-btn", "update_now");
+  setText("#soft-update-later-btn", "update_later");
   setText(".journey-title", "journey");
   setText(".journey-hero-note", "journey_complete_all");
   setAttr("#journey-start-btn", "aria-label", "start_selected_level");

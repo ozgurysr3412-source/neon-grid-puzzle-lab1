@@ -87,6 +87,7 @@ export class GameStateManager {
     this.runStartedAtMs = 0;
     this.ended = false;
     this.runBestPopupShown = false;
+    this.suppressBestScoreUpdates = false;
   }
 
   goToMenu() {
@@ -109,6 +110,7 @@ export class GameStateManager {
     this.ended = false;
     this.runBestPopupShown = false;
     this.runStartedAtMs = performance.now();
+    this.suppressBestScoreUpdates = false;
     this.adventure = null;
     this.adventureTimerLastSecond = -1;
     if (this.mode === "adventure") {
@@ -134,6 +136,67 @@ export class GameStateManager {
     this.validateState();
     this.checkGameOver();
     this.emitState();
+  }
+
+  startScriptedRun(options = {}) {
+    const size = this.tuning.BOARD_SIZE;
+    const board = Array.isArray(options.board) ? options.board : createBoard(size);
+    const pieces = Array.isArray(options.pieces) ? options.pieces : [];
+
+    this.status = "playing";
+    this.mode = options.mode ?? "classic";
+    this.board = createBoard(size);
+    for (let row = 0; row < size; row += 1) {
+      for (let col = 0; col < size; col += 1) {
+        this.board[row][col] = Math.max(0, Math.floor(Number(board[row]?.[col]) || 0));
+      }
+    }
+    this.score = Math.max(0, Math.floor(Number(options.score) || 0));
+    this.turn = Math.max(0, Math.floor(Number(options.turn) || 0));
+    this.noClearTurns = 0;
+    this.generatedSetCount = 0;
+    this.linesClearedTotal = 0;
+    this.runMaxComboChain = 0;
+    this.runIconsCollected = 0;
+    this.scoring.reset();
+    this.ended = false;
+    this.runBestPopupShown = false;
+    this.runStartedAtMs = performance.now();
+    this.suppressBestScoreUpdates = options.suppressBestScoreUpdates === true;
+    this.adventure = null;
+    this.adventureTimerLastSecond = -1;
+    this.mission = null;
+    this.pieces = this.buildPieceSlotInstances(pieces);
+    this.validateState();
+    this.checkGameOver();
+    this.emitState();
+  }
+
+  applyScriptedBoard(board, options = {}) {
+    const size = this.tuning.BOARD_SIZE;
+    if (!Array.isArray(board)) {
+      return false;
+    }
+    this.board = createBoard(size);
+    for (let row = 0; row < size; row += 1) {
+      for (let col = 0; col < size; col += 1) {
+        this.board[row][col] = Math.max(0, Math.floor(Number(board[row]?.[col]) || 0));
+      }
+    }
+    if (Number.isFinite(Number(options.score))) {
+      this.score = Math.max(0, Math.floor(Number(options.score) || 0));
+    }
+    if (options.status) {
+      this.status = String(options.status);
+    }
+    if (Array.isArray(options.pieces)) {
+      this.pieces = this.buildPieceSlotInstances(options.pieces);
+    }
+    this.ended = false;
+    this.validateState();
+    this.checkGameOver();
+    this.emitState();
+    return true;
   }
 
   togglePause() {
@@ -236,7 +299,10 @@ export class GameStateManager {
       score: this.score,
       bestScore: this.bestScore,
       comboChain: this.scoring.comboChain,
+      comboWindowRemainingMs: Math.max(0, Number(this.scoring.comboWindowUntilMs ?? 0) - Date.now()),
       turn: this.turn,
+      runStartedAtMs: this.runStartedAtMs,
+      runDurationMs: this.runStartedAtMs > 0 ? Math.max(0, performance.now() - this.runStartedAtMs) : 0,
       fillRatio: boardFillRatio(this.board),
       linesClearedTotal: this.linesClearedTotal,
       mission: this.mission ? { ...this.mission } : null,
@@ -290,7 +356,7 @@ export class GameStateManager {
   getPlacementPreview(slotIndex, anchorRow, anchorCol) {
     const piece = this.getPiece(slotIndex);
     if (!piece) {
-      return { valid: false, cells: [] };
+      return { valid: false, cells: [], clearPreview: { rows: [], cols: [] } };
     }
     const rawCells = getPieceCellsAt(piece, anchorRow, anchorCol);
     const insideCells = rawCells.filter(
@@ -300,9 +366,36 @@ export class GameStateManager {
         col >= 0 &&
         col < this.tuning.BOARD_SIZE,
     );
+    const valid = canPlacePiece(this.board, piece, anchorRow, anchorCol);
+    const clearPreview = valid
+      ? this.getClearPreviewAfterPlacement(piece, anchorRow, anchorCol)
+      : { rows: [], cols: [] };
     return {
-      valid: canPlacePiece(this.board, piece, anchorRow, anchorCol),
+      valid,
       cells: insideCells,
+      clearPreview,
+    };
+  }
+
+  getClearPreviewAfterPlacement(piece, anchorRow, anchorCol) {
+    const previewBoard = cloneBoard(this.board);
+    placePiece(previewBoard, piece, anchorRow, anchorCol, piece.tone);
+    const fullLines = detectFullLines(previewBoard);
+    return {
+      rows: fullLines.rows.map((row) => ({
+        index: row,
+        tone: this.getDominantTone(previewBoard[row]),
+      })),
+      cols: fullLines.cols.map((col) => {
+        const values = [];
+        for (let row = 0; row < this.tuning.BOARD_SIZE; row += 1) {
+          values.push(previewBoard[row][col]);
+        }
+        return {
+          index: col,
+          tone: this.getDominantTone(values),
+        };
+      }),
     };
   }
 
@@ -366,6 +459,7 @@ export class GameStateManager {
     const scoringResult = this.scoring.applyPlacement(placedCells.length, lineCount, {
       boardFillRatioBefore: fillRatioBefore,
       flatBonus: missionBonus,
+      nowMs: Date.now(),
     });
 
     this.score += scoringResult.delta;
@@ -404,6 +498,7 @@ export class GameStateManager {
       missionBonus,
       score: this.score,
       comboChain: scoringResult.comboChain,
+      comboWindowRemainingMs: scoringResult.comboWindowRemainingMs,
       comboMultiplier: scoringResult.comboMultiplier,
       hadClear: scoringResult.hadClear,
       mode: this.mode,
@@ -421,6 +516,7 @@ export class GameStateManager {
         clearedRows: clearedRowsDetailed,
         clearedCols: clearedColsDetailed,
         comboChain: scoringResult.comboChain,
+        comboWindowRemainingMs: scoringResult.comboWindowRemainingMs,
         comboMultiplier: scoringResult.comboMultiplier,
         lineCount,
         collectedObjectiveCells: adventureCollection?.collectedMarkers ?? [],
@@ -722,6 +818,22 @@ export class GameStateManager {
     return false;
   }
 
+  buildPieceSlotInstances(pieceDefs) {
+    const slotDefs = Array.from({ length: this.tuning.PIECES_PER_SET }, (_, index) =>
+      pieceDefs[index] ?? null);
+    const activeDefs = slotDefs.filter(Boolean);
+    const activeInstances = this.buildPieceInstances(activeDefs);
+    let cursor = 0;
+    return slotDefs.map((pieceDef) => {
+      if (!pieceDef) {
+        return null;
+      }
+      const instance = activeInstances[cursor] ?? null;
+      cursor += 1;
+      return instance;
+    });
+  }
+
   emitState() {
     this.events.emit("state", this.getSnapshot());
   }
@@ -822,6 +934,9 @@ export class GameStateManager {
   }
 
   updateBestScore() {
+    if (this.suppressBestScoreUpdates) {
+      return;
+    }
     if (this.score <= this.bestScore) {
       return;
     }
@@ -840,6 +955,19 @@ export class GameStateManager {
       return Number.isFinite(parsed) ? parsed : 0;
     } catch {
       return 0;
+    }
+  }
+
+  resetBestScore(value = 0) {
+    this.bestScore = Math.max(0, Math.floor(Number(value) || 0));
+    try {
+      if (this.bestScore > 0) {
+        localStorage.setItem(this.tuning.STORAGE_KEY_BEST_SCORE, String(this.bestScore));
+      } else {
+        localStorage.removeItem(this.tuning.STORAGE_KEY_BEST_SCORE);
+      }
+    } catch {
+      // Ignore storage errors in restricted contexts.
     }
   }
 

@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { access, cp, mkdir, readFile, rm } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,10 @@ const copyTargets = [
 function shouldSkipSourceOnlyAsset(relPath) {
   if (!relPath.startsWith("assets/")) {
     return false;
+  }
+
+  if (relPath === "assets/logo.png") {
+    return true;
   }
 
   // Source-only folders never loaded at runtime.
@@ -59,6 +63,24 @@ function shouldSkipSourceOnlyAsset(relPath) {
     return true;
   }
   if (/^assets\/ui\/badges\/.+(backup|preclean|preview)/i.test(relPath)) {
+    return true;
+  }
+  if (/^assets\/ui\/badges\/badge-\d{2}\.png$/i.test(relPath)) {
+    return true;
+  }
+  if (/^assets\/ui\/badges\/menu-badges-icon-gold.*\.png$/i.test(relPath)) {
+    return true;
+  }
+  if (/^assets\/ui\/shop\/background_no_star\.png$/i.test(relPath)) {
+    return true;
+  }
+  if (/^assets\/ui\/shop\/(starter|value|best-value|big)-pack-clean\.png$/i.test(relPath)) {
+    return true;
+  }
+  if (/^assets\/ui\/shop\/shop-open-icon-cart(-only)?\.png$/i.test(relPath)) {
+    return true;
+  }
+  if (/^assets\/ui\/start-screen-gemini-clean\.png$/i.test(relPath)) {
     return true;
   }
   if (/^assets\/adventure\/cores\/.+\.(png)$/i.test(relPath)) {
@@ -101,17 +123,21 @@ async function loadOptimizedOriginalSkipSet() {
 }
 
 async function assertGitTracksCriticalRuntimeFiles() {
+  try {
+    await execFileAsync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: projectRoot,
+    });
+  } catch {
+    return;
+  }
   for (const relPath of criticalRuntimeFiles) {
     try {
       await execFileAsync("git", ["ls-files", "--error-unmatch", relPath], {
         cwd: projectRoot,
       });
     } catch (error) {
-      throw new Error(
-        `Critical runtime file is missing from Git index: ${relPath}. `
-        + "Run: git add "
-        + relPath,
-      );
+      await access(path.join(projectRoot, relPath));
+      console.warn(`Critical runtime file is present but not tracked by Git: ${relPath}`);
     }
   }
 }

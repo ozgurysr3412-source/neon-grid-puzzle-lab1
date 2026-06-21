@@ -19,26 +19,22 @@ export class DragDropController {
   }
 
   onPointerDown = (event) => {
-    const card = event.target.closest(".piece-card");
-    if (!card || !this.state.isInteractive()) {
+    if (!this.state.isInteractive()) {
       return;
     }
 
+    const pickupTarget = this.resolvePickupTarget(event);
+    if (!pickupTarget) {
+      return;
+    }
+
+    const { card, pieceGrid } = pickupTarget;
     const slotIndex = Number(card.dataset.slot);
     if (!Number.isInteger(slotIndex)) {
       return;
     }
     const piece = this.state.getPiece(slotIndex);
     if (!piece) {
-      return;
-    }
-
-    const pieceGrid = card.querySelector(".piece-grid");
-    if (!pieceGrid) {
-      return;
-    }
-    const targetInGrid = event.target === pieceGrid || pieceGrid.contains(event.target);
-    if (!targetInGrid) {
       return;
     }
 
@@ -87,6 +83,60 @@ export class DragDropController {
     card.style.visibility = "hidden";
     this.scheduleDragFrame();
   };
+
+  resolvePickupTarget(event) {
+    const tray = this.ui.elements.pieceTray;
+    if (!tray) {
+      return null;
+    }
+
+    const directCard = event.target.closest?.(".piece-card");
+    const directGrid = directCard?.querySelector?.(".piece-grid") ?? null;
+    const directGridHit = Boolean(
+      directGrid &&
+      (event.target === directGrid || directGrid.contains(event.target)),
+    );
+
+    if (directCard && tray.contains(directCard) && directGridHit) {
+      return { card: directCard, pieceGrid: directGrid };
+    }
+
+    const intentCard = this.resolveIntentCardFromTray(event.clientX, event.clientY);
+    const intentGrid = intentCard?.querySelector?.(".piece-grid") ?? null;
+    if (!intentCard || !intentGrid) {
+      return null;
+    }
+
+    return { card: intentCard, pieceGrid: intentGrid };
+  }
+
+  resolveIntentCardFromTray(clientX, clientY) {
+    const tray = this.ui.elements.pieceTray;
+    const rect = tray?.getBoundingClientRect?.();
+    if (!tray || !rect || rect.width <= 0 || rect.height <= 0) {
+      return null;
+    }
+
+    const yTolerance = Math.max(18, rect.height * 0.18);
+    const insideIntentBand =
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top - yTolerance &&
+      clientY <= rect.bottom + yTolerance;
+
+    if (!insideIntentBand) {
+      return null;
+    }
+
+    const slotCount = Math.max(3, tray.children.length);
+    const zoneWidth = rect.width / slotCount;
+    const slotIndex = Math.max(
+      0,
+      Math.min(slotCount - 1, Math.floor((clientX - rect.left) / zoneWidth)),
+    );
+    const card = tray.children[slotIndex];
+    return card instanceof HTMLElement ? card : null;
+  }
 
   onPointerMove = (event) => {
     if (!this.drag) {
@@ -227,7 +277,7 @@ export class DragDropController {
 
     this.drag.boardAnchor = boardAnchor;
     this.drag.preview = preview;
-    this.ui.showGhost(preview.cells, preview.valid);
+    this.ui.showGhost(preview.cells, preview.valid, preview.clearPreview);
   }
 
   abortDrag() {
