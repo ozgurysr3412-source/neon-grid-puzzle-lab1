@@ -1,18 +1,10 @@
 import { t } from "../localization.js";
 
-const JOURNEY_ROW_RANGES = [
-  [92, 100],
-  [81, 91],
-  [70, 80],
-  [59, 69],
-  [48, 58],
-  [37, 47],
-  [34, 36],
-  [28, 33],
-  [21, 27],
-  [12, 20],
-  [1, 11],
-];
+const JOURNEY_WORLD_COUNT = 10;
+const JOURNEY_LEVELS_PER_WORLD = 10;
+const JOURNEY_WORLD_ASSET_VERSION = "20260623b";
+const JOURNEY_NODE_X = [50, 39, 58, 45, 62, 51, 37, 55, 45, 50];
+const JOURNEY_NODE_Y = [87, 79.5, 72, 64.5, 57, 49.5, 42, 34.5, 27, 19.5];
 
 export class JourneyController {
   constructor({ toggleOverlay } = {}) {
@@ -34,6 +26,8 @@ export class JourneyController {
       backBtn: document.getElementById("journey-back-btn"),
       startBtn: document.getElementById("journey-start-btn"),
       startLabel: document.getElementById("journey-start-label"),
+      progress: document.getElementById("journey-progress"),
+      progressValue: document.getElementById("journey-progress-value"),
       levelMap: document.getElementById("journey-level-map"),
     };
 
@@ -41,7 +35,9 @@ export class JourneyController {
       onJourneyBack: null,
       onJourneyStart: null,
     };
+    this.worldImageObserver = null;
     this.isBound = false;
+    this.scheduleInitialWorldPreload();
   }
 
   bindControls({ onJourneyBack, onJourneyStart } = {}) {
@@ -70,6 +66,15 @@ export class JourneyController {
       }
       this.selectJourneyLevel(level);
     });
+    const preventJourneyZoom = (event) => {
+      if (event.touches?.length > 1 || event.type.startsWith("gesture")) {
+        event.preventDefault();
+      }
+    };
+    this.elements.overlay?.addEventListener("touchmove", preventJourneyZoom, { passive: false });
+    ["gesturestart", "gesturechange", "gestureend"].forEach((eventName) => {
+      this.elements.overlay?.addEventListener(eventName, preventJourneyZoom, { passive: false });
+    });
 
     this.isBound = true;
   }
@@ -89,6 +94,7 @@ export class JourneyController {
     this.panelState.completed = { ...(completed ?? {}) };
     this.renderJourneyPanel();
     this.toggleOverlay(this.elements.overlay, true);
+    this.focusSelectedLevel({ behavior: "auto" });
   }
 
   close() {
@@ -118,7 +124,7 @@ export class JourneyController {
       return;
     }
     this.panelState.selectedLevel = safeLevel;
-    this.renderJourneyPanel();
+    this.syncJourneySelection();
   }
 
   renderJourneyMap() {
@@ -126,20 +132,76 @@ export class JourneyController {
     if (!root) {
       return;
     }
+    this.worldImageObserver?.disconnect();
+    this.worldImageObserver = null;
     root.innerHTML = "";
+    const currentWorld = Math.min(
+      JOURNEY_WORLD_COUNT,
+      Math.max(1, Math.ceil(this.panelState.currentLevel / JOURNEY_LEVELS_PER_WORLD)),
+    );
 
-    JOURNEY_ROW_RANGES.forEach(([start, end]) => {
+    for (let world = JOURNEY_WORLD_COUNT; world >= 1; world -= 1) {
+      const start = ((world - 1) * JOURNEY_LEVELS_PER_WORLD) + 1;
       if (start > this.panelState.totalLevels) {
-        return;
+        continue;
       }
-      const row = document.createElement("div");
-      row.className = "journey-row";
-      const safeEnd = Math.min(end, this.panelState.totalLevels);
-      for (let level = start; level <= safeEnd; level += 1) {
+      const end = Math.min(world * JOURNEY_LEVELS_PER_WORLD, this.panelState.totalLevels);
+      const section = document.createElement("section");
+      section.className = "journey-world";
+      section.dataset.world = String(world);
+
+      const background = document.createElement("img");
+      background.className = "journey-world__background";
+      const backgroundSource = this.getWorldImageSource(world);
+      if (world === currentWorld) {
+        background.src = backgroundSource;
+        background.fetchPriority = "high";
+      } else {
+        background.dataset.src = backgroundSource;
+      }
+      background.alt = "";
+      background.decoding = "async";
+      section.appendChild(background);
+
+      const path = document.createElement("div");
+      path.className = "journey-world__path";
+      section.appendChild(path);
+
+      if (world === JOURNEY_WORLD_COUNT) {
+        const finalReward = document.createElement("div");
+        finalReward.className = "journey-final-reward";
+        const finalCompleted = Boolean(this.panelState.completed?.[100]);
+        finalReward.classList.toggle("journey-final-reward--ready", finalCompleted);
+
+        const glow = document.createElement("img");
+        glow.className = "journey-final-reward__glow";
+        glow.src = "./assets/ui/journey/chest-glow-rays.webp";
+        glow.alt = "";
+        glow.decoding = "async";
+        finalReward.appendChild(glow);
+
+        const chest = document.createElement("img");
+        chest.className = "journey-final-reward__chest";
+        chest.src = "./assets/ui/journey/chest-gold.webp";
+        chest.alt = "";
+        chest.decoding = "async";
+        finalReward.appendChild(chest);
+
+        const note = document.createElement("p");
+        note.className = "journey-final-reward__note";
+        note.textContent = t(finalCompleted ? "journey_final_chest_ready" : "journey_final_chest_locked");
+        finalReward.appendChild(note);
+        section.appendChild(finalReward);
+      }
+
+      for (let level = start; level <= end; level += 1) {
+        const slot = level - start;
         const node = document.createElement("button");
         node.type = "button";
-        node.className = "journey-node level-block";
+        node.className = "journey-node";
         node.dataset.level = String(level);
+        node.style.setProperty("--journey-node-x", `${JOURNEY_NODE_X[slot]}%`);
+        node.style.setProperty("--journey-node-y", `${JOURNEY_NODE_Y[slot]}%`);
 
         const label = document.createElement("span");
         label.className = "journey-node__label";
@@ -154,24 +216,107 @@ export class JourneyController {
         } else {
           node.classList.add("locked");
         }
+        if (level % JOURNEY_LEVELS_PER_WORLD === 0) {
+          node.classList.add("journey-node--milestone");
+        }
         if (level === this.panelState.selectedLevel) {
           node.classList.add("journey-node--selected");
         }
         node.disabled = !state.unlocked;
-        row.appendChild(node);
+        section.appendChild(node);
       }
-      root.appendChild(row);
-    });
+      root.appendChild(section);
+    }
+    this.observeWorldImages();
   }
 
-  renderJourneyPanel() {
-    this.renderJourneyMap();
+  observeWorldImages() {
+    const pendingImages = this.elements.levelMap?.querySelectorAll(".journey-world__background[data-src]");
+    if (!pendingImages?.length) {
+      return;
+    }
+    if (!("IntersectionObserver" in window)) {
+      pendingImages.forEach((image) => {
+        image.src = image.dataset.src;
+        delete image.dataset.src;
+      });
+      return;
+    }
+    this.worldImageObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) {
+          return;
+        }
+        const image = entry.target;
+        if (image instanceof HTMLImageElement && image.dataset.src) {
+          image.src = image.dataset.src;
+          delete image.dataset.src;
+        }
+        observer.unobserve(image);
+      });
+    }, {
+      root: this.elements.levelMap?.parentElement ?? null,
+      rootMargin: "100% 0px",
+      threshold: 0.01,
+    });
+    pendingImages.forEach((image) => this.worldImageObserver.observe(image));
+  }
+
+  getWorldImageSource(world) {
+    const safeWorld = Math.min(JOURNEY_WORLD_COUNT, Math.max(1, Math.floor(Number(world) || 1)));
+    return `./assets/ui/journey/worlds/world-${String(safeWorld).padStart(2, "0")}.webp?v=${JOURNEY_WORLD_ASSET_VERSION}`;
+  }
+
+  scheduleInitialWorldPreload() {
+    const preload = () => {
+      const image = new Image();
+      image.decoding = "async";
+      image.fetchPriority = "low";
+      image.src = this.getWorldImageSource(1);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(preload, { timeout: 3000 });
+    } else {
+      window.setTimeout(preload, 1800);
+    }
+  }
+
+  syncJourneySelection() {
+    this.elements.levelMap?.querySelectorAll(".journey-node").forEach((node) => {
+      const level = Number(node.dataset.level);
+      node.classList.toggle("journey-node--selected", level === this.panelState.selectedLevel);
+    });
     if (this.elements.startLabel) {
       this.elements.startLabel.textContent = t("level_label", { level: this.panelState.selectedLevel });
+    }
+    if (this.elements.progressValue) {
+      this.elements.progressValue.textContent = `${this.panelState.currentLevel} / ${this.panelState.totalLevels}`;
+    }
+    if (this.elements.progress) {
+      this.elements.progress.setAttribute(
+        "aria-label",
+        `${this.panelState.currentLevel} / ${this.panelState.totalLevels}`,
+      );
     }
     if (this.elements.startBtn) {
       const selectedState = this.resolveJourneyLevelState(this.panelState.selectedLevel);
       this.elements.startBtn.disabled = !selectedState.unlocked;
     }
+  }
+
+  focusSelectedLevel({ behavior = "smooth" } = {}) {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const node = this.elements.levelMap?.querySelector(
+          `.journey-node[data-level="${this.panelState.selectedLevel}"]`,
+        );
+        node?.scrollIntoView({ behavior, block: "center", inline: "nearest" });
+      });
+    });
+  }
+
+  renderJourneyPanel() {
+    this.renderJourneyMap();
+    this.syncJourneySelection();
   }
 }
