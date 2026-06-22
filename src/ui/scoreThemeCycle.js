@@ -5,6 +5,9 @@ export const SCORE_THEME_MODES = Object.freeze([
   "emerald",
   "sunset",
   "pink",
+  "sapphire",
+  "amber",
+  "frost",
 ]);
 
 export function getScoreThemeBand(score) {

@@ -119,6 +119,9 @@ const VISUAL_MODE_LABELS = Object.freeze({
   emerald: "Emerald Mist",
   sunset: "Sunset Ember",
   pink: "Candy Pink",
+  sapphire: "Sapphire Tide",
+  amber: "Amber Dusk",
+  frost: "Arctic Frost",
 });
 const ADVENTURE_GOLD_SHATTER = {
   core: "#fff3cd",

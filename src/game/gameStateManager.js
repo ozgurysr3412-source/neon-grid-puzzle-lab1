@@ -782,7 +782,7 @@ export class GameStateManager {
     }
 
     const targetScore = Number(this.adventure.objective?.targetScore ?? 0);
-    if (this.score >= targetScore) {
+    if (this.score >= targetScore && this.areAdventureIconTargetsComplete()) {
       this.adventure.completed = true;
       this.completeAdventureRun();
       return true;
@@ -1197,6 +1197,9 @@ export class GameStateManager {
     }
     const objective = this.adventure.objective;
     if (objective.kind === "score_target") {
+      if (!this.areAdventureIconTargetsComplete()) {
+        return false;
+      }
       const targetScore = Math.max(1, Math.floor(Number(objective.targetScore) || 0));
       if (this.score < targetScore) {
         return false;
@@ -1205,6 +1208,16 @@ export class GameStateManager {
       return remainingMs > 0;
     }
     return Object.values(this.adventure.remaining ?? {}).every((count) => Number(count) <= 0);
+  }
+
+  areAdventureIconTargetsComplete() {
+    const objective = this.adventure?.objective;
+    if (!objective || objective.kind !== "score_target") {
+      return true;
+    }
+    const remaining = objective.iconRemaining ?? objective.iconTargets ?? {};
+    return Math.max(0, Number(remaining.star) || 0) <= 0
+      && Math.max(0, Number(remaining.ruby) || 0) <= 0;
   }
 
   getAdventureTimerRemainingMs(now = performance.now()) {

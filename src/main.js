@@ -797,6 +797,30 @@ const AD_FLOW_TEST_PANEL_ENABLED = (() => {
     return false;
   }
 })();
+const JOURNEY_TEST_PANEL_ENABLED = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return params.get("journeyPanel") === "1" || params.get("panel") === "journey";
+  } catch {
+    return false;
+  }
+})();
+const JOURNEY_TEST_INITIAL_LEVEL = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return Math.floor(Number(params.get("journeyLevel")) || 21);
+  } catch {
+    return 21;
+  }
+})();
+const JOURNEY_TEST_AUTO_START = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return JOURNEY_TEST_PANEL_ENABLED && params.get("journeyAutoStart") === "1";
+  } catch {
+    return false;
+  }
+})();
 const ONBOARDING_DEMO_PREVIEW = (() => {
   try {
     const params = new URLSearchParams(window.location.search || "");
@@ -866,7 +890,8 @@ function syncFxSuspension(snapshot = state.getSnapshot()) {
 const BADGES_UI_VARIANT = "v2";
 const ADVENTURE_MAX_LEVEL = getAdventureLevelCount();
 const FIREBASE_LEADERBOARD_SDK_VERSION = "10.14.1";
-const LEADERBOARD_FETCH_LIMIT = 500;
+const LEADERBOARD_FETCH_LIMIT = 100;
+const LEADERBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 const LEADERBOARD_SEED_VERSION = "v6-weekly-7day-15000";
 const LEADERBOARD_SEED_VERSION_STORAGE_KEY = "neon-grid-leaderboard-seed-version-v1";
 const LEADERBOARD_WEEKLY_ROTATION_STORAGE_KEY = "neon-grid-leaderboard-weekly-rotation-v1";
@@ -1015,6 +1040,13 @@ const leaderboardFirebaseRuntime = {
   seedPromise: null,
   seedReady: false,
   weeklyRotationPromise: null,
+  cachedData: null,
+  cachedAtMs: 0,
+  fetchPromise: null,
+  syncedScoreSignatures: {
+    global: "",
+    weekly: "",
+  },
 };
 
 function seedMixHash(input) {
@@ -2267,22 +2299,56 @@ async function syncPlayerLeaderboardScores(snapshot, profile) {
   }
   const bestScore = Math.max(0, Math.floor(Number(snapshot?.bestScore) || 0));
   const weeklyScore = computeWeeklyPlayerScore(snapshot, bestScore);
+  const safeName = String(profile?.name ?? "Player").replace(/\s+/g, " ").trim().slice(0, 18) || "Player";
+  const safeCountry = /^[A-Z]{2}$/.test(String(profile?.countryCode ?? "").toUpperCase())
+    ? String(profile.countryCode).toUpperCase()
+    : "TR";
+  const scoreEntries = [
+    { mode: "global", score: bestScore },
+    { mode: "weekly", score: weeklyScore },
+  ];
+  const pendingEntries = scoreEntries.filter(({ mode, score }) => {
+    if (score <= 0) {
+      return false;
+    }
+    const signature = `${score}|${safeName}|${safeCountry}`;
+    return leaderboardFirebaseRuntime.syncedScoreSignatures[mode] !== signature;
+  });
+  if (!pendingEntries.length) {
+    return;
+  }
   try {
-    await Promise.all([
-      upsertLeaderboardScore({ mode: "global", score: bestScore, profile }),
-      upsertLeaderboardScore({ mode: "weekly", score: weeklyScore, profile }),
-    ]);
+    await Promise.all(pendingEntries.map(({ mode, score }) => (
+      upsertLeaderboardScore({ mode, score, profile })
+    )));
+    pendingEntries.forEach(({ mode, score }) => {
+      leaderboardFirebaseRuntime.syncedScoreSignatures[mode] = `${score}|${safeName}|${safeCountry}`;
+    });
+    leaderboardFirebaseRuntime.cachedData = null;
+    leaderboardFirebaseRuntime.cachedAtMs = 0;
   } catch (error) {
     console.warn("[leaderboard] score sync failed.", error);
   }
 }
 
 async function fetchLeaderboardFromFirebase(snapshot, profile) {
+  const now = Date.now();
+  if (
+    leaderboardFirebaseRuntime.cachedData
+    && (now - leaderboardFirebaseRuntime.cachedAtMs) < LEADERBOARD_CACHE_TTL_MS
+  ) {
+    return leaderboardFirebaseRuntime.cachedData;
+  }
+  if (leaderboardFirebaseRuntime.fetchPromise) {
+    return leaderboardFirebaseRuntime.fetchPromise;
+  }
   const firebaseReady = await initLeaderboardFirebase();
   if (!firebaseReady || !leaderboardFirebaseRuntime.db || !leaderboardFirebaseRuntime.api) {
     return null;
   }
-  await ensureGridCrownSeedLeaderboard();
+  if (leaderboardFirebaseRuntime.fetchPromise) {
+    return leaderboardFirebaseRuntime.fetchPromise;
+  }
 
   const {
     collection,
@@ -2303,70 +2369,78 @@ async function fetchLeaderboardFromFirebase(snapshot, profile) {
     })),
   ).slice(0, LEADERBOARD_FETCH_LIMIT);
 
-  try {
-    const [globalSnapshot, weeklySnapshot, playerGlobalSnapshot, playerWeeklySnapshot] = await Promise.all([
-      getDocs(query(
-        collection(leaderboardFirebaseRuntime.db, LEADERBOARD_COLLECTIONS.global),
-        orderBy("score", "desc"),
-        limit(LEADERBOARD_FETCH_LIMIT),
-      )),
-      getDocs(query(
-        collection(leaderboardFirebaseRuntime.db, LEADERBOARD_COLLECTIONS.weekly),
-        orderBy("score", "desc"),
-        limit(LEADERBOARD_FETCH_LIMIT),
-      )),
-      getDoc(doc(leaderboardFirebaseRuntime.db, LEADERBOARD_COLLECTIONS.global, leaderboardFirebaseRuntime.playerId)),
-      getDoc(doc(leaderboardFirebaseRuntime.db, LEADERBOARD_COLLECTIONS.weekly, leaderboardFirebaseRuntime.playerId)),
-    ]);
+  leaderboardFirebaseRuntime.fetchPromise = (async () => {
+    try {
+      const [globalSnapshot, weeklySnapshot, playerGlobalSnapshot, playerWeeklySnapshot] = await Promise.all([
+        getDocs(query(
+          collection(leaderboardFirebaseRuntime.db, LEADERBOARD_COLLECTIONS.global),
+          orderBy("score", "desc"),
+          limit(LEADERBOARD_FETCH_LIMIT),
+        )),
+        getDocs(query(
+          collection(leaderboardFirebaseRuntime.db, LEADERBOARD_COLLECTIONS.weekly),
+          orderBy("score", "desc"),
+          limit(LEADERBOARD_FETCH_LIMIT),
+        )),
+        getDoc(doc(leaderboardFirebaseRuntime.db, LEADERBOARD_COLLECTIONS.global, leaderboardFirebaseRuntime.playerId)),
+        getDoc(doc(leaderboardFirebaseRuntime.db, LEADERBOARD_COLLECTIONS.weekly, leaderboardFirebaseRuntime.playerId)),
+      ]);
 
-    const globalEntries = toUiEntries(globalSnapshot.docs.map((entryDoc) => ({
-      entryId: entryDoc.id,
-      ...entryDoc.data(),
-    })));
-    const weeklyEntries = toUiEntries(weeklySnapshot.docs.map((entryDoc) => ({
-      entryId: entryDoc.id,
-      ...entryDoc.data(),
-    })));
+      const globalEntries = toUiEntries(globalSnapshot.docs.map((entryDoc) => ({
+        entryId: entryDoc.id,
+        ...entryDoc.data(),
+      })));
+      const weeklyEntries = toUiEntries(weeklySnapshot.docs.map((entryDoc) => ({
+        entryId: entryDoc.id,
+        ...entryDoc.data(),
+      })));
 
-    if (!globalEntries.length && !weeklyEntries.length) {
+      if (!globalEntries.length && !weeklyEntries.length) {
+        return null;
+      }
+
+      const yourRankGlobal = globalEntries.find((entry) => entry.isPlayer)
+        ?? (playerGlobalSnapshot.exists() ? {
+          rank: null,
+          name: String(playerGlobalSnapshot.data()?.name ?? profile?.name ?? "Player").slice(0, 18),
+          countryCode: String(playerGlobalSnapshot.data()?.countryCode ?? profile?.countryCode ?? "TR").toUpperCase(),
+          score: Math.max(0, Math.floor(Number(playerGlobalSnapshot.data()?.score) || 0)),
+          isPlayer: true,
+        } : null);
+
+      const yourRankWeekly = weeklyEntries.find((entry) => entry.isPlayer)
+        ?? (playerWeeklySnapshot.exists() ? {
+          rank: null,
+          name: String(playerWeeklySnapshot.data()?.name ?? profile?.name ?? "Player").slice(0, 18),
+          countryCode: String(playerWeeklySnapshot.data()?.countryCode ?? profile?.countryCode ?? "TR").toUpperCase(),
+          score: Math.max(0, Math.floor(Number(playerWeeklySnapshot.data()?.score) || 0)),
+          isPlayer: true,
+        } : null);
+
+      const result = {
+        globalEntries,
+        weeklyEntries,
+        profile,
+        yourRankGlobal,
+        yourRankWeekly,
+      };
+      leaderboardFirebaseRuntime.cachedData = result;
+      leaderboardFirebaseRuntime.cachedAtMs = Date.now();
+      return result;
+    } catch (error) {
+      console.warn("[leaderboard] Firebase fetch failed; prototype mode active.", error);
       return null;
+    } finally {
+      leaderboardFirebaseRuntime.fetchPromise = null;
     }
-
-    const yourRankGlobal = globalEntries.find((entry) => entry.isPlayer)
-      ?? (playerGlobalSnapshot.exists() ? {
-        rank: null,
-        name: String(playerGlobalSnapshot.data()?.name ?? profile?.name ?? "Player").slice(0, 18),
-        countryCode: String(playerGlobalSnapshot.data()?.countryCode ?? profile?.countryCode ?? "TR").toUpperCase(),
-        score: Math.max(0, Math.floor(Number(playerGlobalSnapshot.data()?.score) || 0)),
-        isPlayer: true,
-      } : null);
-
-    const yourRankWeekly = weeklyEntries.find((entry) => entry.isPlayer)
-      ?? (playerWeeklySnapshot.exists() ? {
-        rank: null,
-        name: String(playerWeeklySnapshot.data()?.name ?? profile?.name ?? "Player").slice(0, 18),
-        countryCode: String(playerWeeklySnapshot.data()?.countryCode ?? profile?.countryCode ?? "TR").toUpperCase(),
-        score: Math.max(0, Math.floor(Number(playerWeeklySnapshot.data()?.score) || 0)),
-        isPlayer: true,
-      } : null);
-
-    return {
-      globalEntries,
-      weeklyEntries,
-      profile,
-      yourRankGlobal,
-      yourRankWeekly,
-    };
-  } catch (error) {
-    console.warn("[leaderboard] Firebase fetch failed; prototype mode active.", error);
-    return null;
-  }
+  })();
+  return leaderboardFirebaseRuntime.fetchPromise;
 }
 
 function loadRuntimeSettings() {
   const normalizeVisualMode = (value) => {
     const safe = String(value ?? "").toLowerCase();
-    if (safe === "emerald" || safe === "sunset" || safe === "pink" || safe === "royal") {
+    if (["royal", "emerald", "sunset", "pink", "sapphire", "amber", "frost"].includes(safe)) {
       return safe;
     }
     return "royal";
@@ -3239,14 +3313,17 @@ async function maybeRequestRateUsAfterGameOver(snapshot, { source = "gameover" }
   if (!isRateUsEligibleSnapshot(snapshot)) {
     return false;
   }
+  const result = await inAppReviewService.requestReview({ source });
+  if (!result?.attempted) {
+    return false;
+  }
   rateUsPromptState = {
     attempted: true,
     lastAttemptDayKey: getLocalDayKey(),
     eligibleSeen: true,
   };
   saveRateUsPromptState(rateUsPromptState);
-  const result = await inAppReviewService.requestReview({ source });
-  return Boolean(result?.attempted);
+  return true;
 }
 
 function recordGameOverForInterstitialCycle() {
@@ -4650,7 +4727,9 @@ function syncSettingsPanelState() {
 }
 
 function applyVisualMode(mode) {
-  const safeMode = mode === "emerald" || mode === "sunset" || mode === "pink" ? mode : "royal";
+  const safeMode = ["emerald", "sunset", "pink", "sapphire", "amber", "frost"].includes(mode)
+    ? mode
+    : "royal";
   runtimeSettings.visualMode = safeMode;
   document.documentElement.setAttribute("data-visual-mode", safeMode);
 }
@@ -5052,7 +5131,7 @@ ui.bindControls({
     syncSettingsPanelState();
   },
   onSettingsCycleVisualMode: () => {
-    const cycle = ["royal", "emerald", "sunset", "pink"];
+    const cycle = ["royal", "emerald", "sunset", "pink", "sapphire", "amber", "frost"];
     const currentIndex = cycle.indexOf(runtimeSettings.visualMode || "royal");
     const nextMode = cycle[(currentIndex + 1 + cycle.length) % cycle.length];
     applyVisualMode(nextMode);
@@ -5419,14 +5498,6 @@ ui.setMenuLeaderboardData({
   activeTab: "global",
   profileLocked: Boolean(leaderboardProfile.profileLocked),
 });
-void (async () => {
-  const leaderboardData = await buildLeaderboardData(initialLeaderboardSnapshot, leaderboardProfile, { syncScores: true });
-  ui.setMenuLeaderboardData({
-    ...leaderboardData,
-    activeTab: "global",
-    profileLocked: Boolean(leaderboardProfile.profileLocked),
-  });
-})();
 
 state.on("state", (snapshot) => {
   const previousStatus = layoutGuardStatus;
@@ -5443,6 +5514,7 @@ state.on("state", (snapshot) => {
   syncGameplayBannerVisibility(snapshot);
   syncGameOverContinueUi(snapshot);
   updateAdFlowTestPanel(snapshot);
+  updateJourneyTestPanel(snapshot);
   if (enteredLevelComplete) {
     playLevelCompleteSfxOnce();
   }
@@ -5454,7 +5526,13 @@ state.on("state", (snapshot) => {
     gameOverExitInFlight = false;
     recordGameOverForInterstitialCycle();
     syncGameOverActionAvailability(snapshot);
-    void ensureGameOverInterstitial({ source: "gameover" });
+    void (async () => {
+      const interstitialShown = await ensureGameOverInterstitial({ source: "gameover" });
+      if (interstitialShown) {
+        await waitForMs(350);
+      }
+      await maybeRequestRateUsAfterGameOver(snapshot, { source: "gameover" });
+    })();
   } else if (snapshot.status !== "over") {
     gameOverInterstitialInFlight = false;
   }
@@ -5697,6 +5775,10 @@ function mountComboTestPanel() {
       <button type="button" data-score-demo="100">Score +100</button>
       <button type="button" data-score-demo="500">Score +500</button>
       <button type="button" data-score-demo="1500">Score +1500</button>
+      <button type="button" data-theme-demo="royal">Royal Night</button>
+      <button type="button" data-theme-demo="sapphire">Sapphire Tide</button>
+      <button type="button" data-theme-demo="amber">Amber Dusk</button>
+      <button type="button" data-theme-demo="frost">Arctic Frost</button>
     </div>
   `;
 
@@ -5707,6 +5789,7 @@ function mountComboTestPanel() {
     }
     const demo = button.dataset.comboDemo;
     const scoreDemo = button.dataset.scoreDemo;
+    const themeDemo = button.dataset.themeDemo;
     if (button.hasAttribute("data-combo-close")) {
       panel.classList.add("is-hidden");
       return;
@@ -5717,6 +5800,11 @@ function mountComboTestPanel() {
         delta,
         comboChain: delta >= 1500 ? 5 : (delta >= 500 ? 3 : 1),
       });
+      return;
+    }
+    if (themeDemo) {
+      applyVisualMode(themeDemo);
+      syncSettingsPanelState();
       return;
     }
     if (demo === "x2") {
@@ -5853,6 +5941,171 @@ function updateAdFlowTestPanel(snapshot = state.getSnapshot?.()) {
   if (removeAdsLabel) {
     removeAdsLabel.textContent = removeAdsUnlocked ? "active" : "passive";
   }
+}
+
+let journeyTestSelectedLevel = Math.max(
+  1,
+  Math.min(ADVENTURE_MAX_LEVEL, JOURNEY_TEST_INITIAL_LEVEL),
+);
+
+function clampJourneyTestLevel(rawLevel) {
+  return Math.max(1, Math.min(ADVENTURE_MAX_LEVEL, Math.floor(Number(rawLevel) || 1)));
+}
+
+function resetJourneyTestFeedback() {
+  audio.resetComboVoiceFlow();
+  smartPraiseState.lastTurn = -99;
+  smartPraiseState.lastAtMs = 0;
+  approvalState.lastTurn = -99;
+  approvalState.lastAtMs = 0;
+}
+
+function startJourneyTestLevel(rawLevel) {
+  journeyTestSelectedLevel = clampJourneyTestLevel(rawLevel);
+  void primeAudioForInteraction();
+  closeMenuShopView();
+  ui.closeSettingsPanel();
+  ui.closeJourneyPanel();
+  resetJourneyTestFeedback();
+  audio.playUiTap({ id: "journey-test-start" });
+  state.startGame({ mode: "adventure", level: journeyTestSelectedLevel });
+  updateJourneyTestPanel();
+}
+
+function openJourneyTestMap() {
+  if (state.getSnapshot().status !== "menu") {
+    state.goToMenu();
+  }
+  const completed = {};
+  for (let level = 1; level < journeyTestSelectedLevel; level += 1) {
+    completed[level] = true;
+  }
+  window.requestAnimationFrame(() => {
+    ui.openJourneyPanel({
+      totalLevels: 100,
+      playableMaxLevel: ADVENTURE_MAX_LEVEL,
+      currentLevel: journeyTestSelectedLevel,
+      completed,
+    });
+  });
+}
+
+function mountJourneyTestPanel() {
+  if (!JOURNEY_TEST_PANEL_ENABLED) {
+    return;
+  }
+  if (!document.getElementById("journey-test-panel-toggle")) {
+    const toggle = document.createElement("button");
+    toggle.id = "journey-test-panel-toggle";
+    toggle.className = "combo-test-panel-toggle journey-test-panel-toggle";
+    toggle.type = "button";
+    toggle.textContent = "Journey Test";
+    toggle.addEventListener("click", () => {
+      document.getElementById("journey-test-panel")?.classList.toggle("is-hidden");
+    });
+    document.body.appendChild(toggle);
+  }
+  if (document.getElementById("journey-test-panel")) {
+    return;
+  }
+
+  const levelButtons = Array.from({ length: 10 }, (_, index) => 21 + index)
+    .map((level) => `<button type="button" data-journey-level="${level}">${level}</button>`)
+    .join("");
+  const panel = document.createElement("aside");
+  panel.id = "journey-test-panel";
+  panel.className = "combo-test-panel journey-test-panel";
+  panel.innerHTML = `
+    <div class="combo-test-panel__header">
+      <span>Journey Level Test</span>
+      <button type="button" data-journey-test-close aria-label="Close Journey test panel">x</button>
+    </div>
+    <p class="combo-test-panel__note">Test-only controls. Player progress is not required to open a level.</p>
+    <div class="combo-test-panel__meters">
+      <span>Selected <strong id="journey-test-selected">21</strong></span>
+      <span>Running <strong id="journey-test-running">-</strong></span>
+    </div>
+    <div class="journey-test-level-picker">
+      <label for="journey-test-level-input">Level</label>
+      <input id="journey-test-level-input" type="number" min="1" max="${ADVENTURE_MAX_LEVEL}" value="${journeyTestSelectedLevel}" inputmode="numeric">
+    </div>
+    <div class="combo-test-panel__grid journey-test-actions">
+      <button type="button" data-journey-action="previous">Previous</button>
+      <button type="button" data-journey-action="start">Start</button>
+      <button type="button" data-journey-action="next">Next</button>
+      <button type="button" data-journey-action="map">Map</button>
+    </div>
+    <div class="journey-test-level-grid" aria-label="Journey levels 21 to 30">
+      ${levelButtons}
+    </div>
+  `;
+
+  const input = panel.querySelector("#journey-test-level-input");
+  input?.addEventListener("change", () => {
+    journeyTestSelectedLevel = clampJourneyTestLevel(input.value);
+    updateJourneyTestPanel();
+  });
+  input?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      void startJourneyTestLevel(input.value);
+    }
+  });
+  panel.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    if (button.hasAttribute("data-journey-test-close")) {
+      panel.classList.add("is-hidden");
+      return;
+    }
+    if (button.dataset.journeyLevel) {
+      void startJourneyTestLevel(button.dataset.journeyLevel);
+      return;
+    }
+    const action = button.dataset.journeyAction;
+    if (action === "previous") {
+      void startJourneyTestLevel(journeyTestSelectedLevel - 1);
+    } else if (action === "start") {
+      void startJourneyTestLevel(input?.value ?? journeyTestSelectedLevel);
+    } else if (action === "next") {
+      void startJourneyTestLevel(journeyTestSelectedLevel + 1);
+    } else if (action === "map") {
+      openJourneyTestMap();
+    }
+  });
+  document.body.appendChild(panel);
+  updateJourneyTestPanel();
+}
+
+function updateJourneyTestPanel(snapshot = state.getSnapshot?.()) {
+  if (!JOURNEY_TEST_PANEL_ENABLED || !snapshot) {
+    return;
+  }
+  const runningLevel = snapshot.mode === "adventure"
+    ? clampJourneyTestLevel(snapshot.adventure?.level)
+    : null;
+  if (runningLevel) {
+    journeyTestSelectedLevel = runningLevel;
+  }
+  const selected = document.getElementById("journey-test-selected");
+  const running = document.getElementById("journey-test-running");
+  const input = document.getElementById("journey-test-level-input");
+  if (selected) {
+    selected.textContent = String(journeyTestSelectedLevel);
+  }
+  if (running) {
+    running.textContent = runningLevel ? String(runningLevel) : "-";
+  }
+  if (input instanceof HTMLInputElement && document.activeElement !== input) {
+    input.value = String(journeyTestSelectedLevel);
+  }
+  document.querySelectorAll("[data-journey-level]").forEach((button) => {
+    button.classList.toggle(
+      "is-active",
+      Number(button.getAttribute("data-journey-level")) === journeyTestSelectedLevel,
+    );
+  });
 }
 
 function updateComboTestPanel(snapshot = state.getSnapshot?.()) {
@@ -6123,7 +6376,12 @@ state.on("gameOver", (payload) => {
 dragDrop.init();
 mountComboTestPanel();
 mountAdFlowTestPanel();
+mountJourneyTestPanel();
 updateComboTestPanel();
+updateJourneyTestPanel();
+if (JOURNEY_TEST_AUTO_START) {
+  window.setTimeout(() => startJourneyTestLevel(journeyTestSelectedLevel), 300);
+}
 const INITIAL_RENDER_PRELOAD_BUDGET_MS = isIosDevice() ? 950 : 240;
 let initialRenderDone = false;
 const performInitialRender = () => {

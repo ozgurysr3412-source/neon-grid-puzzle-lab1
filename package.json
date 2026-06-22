@@ -18,6 +18,7 @@
     "test:stage2:messages": "node scripts/test-stage2-message-policy.mjs",
     "test:stage2:clear-perf": "node scripts/test-stage2-clear-performance.mjs",
     "test:stage2:theme": "node scripts/test-stage2-score-theme.mjs",
+    "test:journey": "node scripts/test-journey-levels.mjs",
     "analyze:cookiecats": "node scripts/analyze-cookie-cats.mjs",
     "test:bestbadge": "node scripts/test-best-badge.mjs"
   },
