@@ -2070,14 +2070,45 @@ body {
 }
 
 .cell.cell--objective-core {
-  background-size: 82% 82%;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background-size: 72% 72%;
   background-position: center;
   background-repeat: no-repeat;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.34));
+  --objective-frame-a: rgba(255, 230, 150, 0.52);
+  --objective-frame-b: rgba(129, 109, 210, 0.44);
+  --objective-frame-glow: rgba(255, 213, 110, 0.2);
+  background-color: rgba(28, 20, 68, 0.72);
+  box-shadow:
+    inset 0 0 0 2px var(--objective-frame-a),
+    inset 0 0 0 5px rgba(15, 10, 38, 0.34),
+    inset 0 10px 16px rgba(255, 255, 255, 0.08),
+    0 2px 5px rgba(0, 0, 0, 0.34),
+    0 0 9px var(--objective-frame-glow);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.28));
+}
+
+.cell.cell--objective-core[data-objective-type="red"] {
+  --objective-frame-a: rgba(255, 132, 158, 0.58);
+  --objective-frame-b: rgba(176, 50, 88, 0.46);
+  --objective-frame-glow: rgba(255, 70, 119, 0.22);
+}
+
+.cell.cell--objective-core[data-objective-type="blue"] {
+  --objective-frame-a: rgba(129, 220, 255, 0.56);
+  --objective-frame-b: rgba(54, 116, 202, 0.48);
+  --objective-frame-glow: rgba(78, 194, 255, 0.2);
+}
+
+.cell.cell--objective-core[data-objective-type="yellow"] {
+  --objective-frame-a: rgba(255, 232, 146, 0.6);
+  --objective-frame-b: rgba(204, 143, 42, 0.46);
+  --objective-frame-glow: rgba(255, 210, 86, 0.24);
 }
 
 .cell.cell--objective-crown {
-  background-size: 132% 132%;
+  background-size: 86% 86%;
   background-position: center;
   filter: drop-shadow(0 0 5px rgba(255, 196, 55, 0.28));
 }
@@ -6995,7 +7026,7 @@ body.ads-disabled .ad-banner-slot {
   .menu-shop-open-btn {
     width: 48px;
     height: 48px;
-    top: calc(var(--menu-ui-top, clamp(14px, 3.3vw, 20px)) + 52px);
+    top: var(--menu-ui-top, clamp(14px, 3.3vw, 20px));
   }
 
   .menu-shop-icon-img {

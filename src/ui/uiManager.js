@@ -1839,6 +1839,9 @@ export class UIManager {
     this.currentStatus = snapshot.status;
     this.currentMode = snapshot.mode ?? "classic";
     this.updateThermalBudget(snapshot);
+    if (snapshot.status === "playing" && previousStatus !== "playing") {
+      this.resetTransientBoardArtifacts();
+    }
     const shell = this.elements.gameShell;
     if (shell) {
       shell.classList.toggle("mode-classic", this.currentMode === "classic");
@@ -2450,6 +2453,28 @@ export class UIManager {
     return Boolean(this.fxProfile?.isIOS);
   }
 
+  resetTransientBoardArtifacts() {
+    this.boardRenderCache.fill("");
+    this.clearGhost();
+    this.elements.board
+      ?.querySelectorAll(".cell")
+      .forEach((cell) => {
+        cell.classList.remove(
+          "cell--clear-hidden",
+          "cell--flash",
+          "cell--line-dominant",
+          "cell--ghost-valid",
+          "cell--ghost-invalid",
+          "cell--hint",
+          "cell--objective-shell",
+          "cell--objective-shell-drain",
+        );
+        cell.style.removeProperty("--clear-glow");
+        cell.style.removeProperty("--clear-accent");
+      });
+    document.querySelectorAll(".drag-piece").forEach((node) => node.remove());
+  }
+
   beginDragSession(slotIndex = null) {
     this.dragSessionActive = true;
     this.dragSessionSlot = Number.isInteger(slotIndex) ? slotIndex : null;
@@ -2532,6 +2557,7 @@ export class UIManager {
     if (this.boardToneCanvasEnabled) {
       this.syncBoardToneCanvasSize();
     }
+    const forceFullCellReconcile = Boolean(this.fxProfile?.isIOS);
     for (let row = 0; row < this.boardSize; row += 1) {
       for (let col = 0; col < this.boardSize; col += 1) {
         const cell = this.cells.get(this.cellKey(row, col));
@@ -2556,7 +2582,7 @@ export class UIManager {
           renderKey = useToneCanvas ? `tone-c:${value}` : `tone:${value}`;
         }
 
-        if (this.boardRenderCache[tileIndex] === renderKey) {
+        if (!forceFullCellReconcile && this.boardRenderCache[tileIndex] === renderKey) {
           continue;
         }
         this.boardRenderCache[tileIndex] = renderKey;
@@ -2565,12 +2591,14 @@ export class UIManager {
         cell.style.removeProperty("background-image");
         cell.classList.toggle("cell--filled", false);
         delete cell.dataset.tone;
+        delete cell.dataset.objectiveType;
 
         if (isObjective) {
           cell.classList.add("cell--objective");
           cell.classList.toggle("cell--objective-crown", objectiveType === "crown");
           cell.classList.toggle("cell--objective-core", useSingleLayerObjective);
           cell.classList.add("cell--filled");
+          cell.dataset.objectiveType = objectiveType;
           const objectiveIcon = useSingleLayerObjective
             ? ADVENTURE_OBJECTIVE_CORE_BY_TYPE[objectiveType]
             : ADVENTURE_VISUALS[objectiveType].icon;
@@ -6881,8 +6909,11 @@ export class UIManager {
     }
     const previousBackground = cell.style.backgroundImage;
     const hadObjectiveClass = cell.classList.contains("cell--objective");
+    const hadObjectiveCoreClass = cell.classList.contains("cell--objective-core");
+    const hadObjectiveCrownClass = cell.classList.contains("cell--objective-crown");
     const hadFilledClass = cell.classList.contains("cell--filled");
     const previousTone = cell.dataset.tone;
+    const previousObjectiveType = cell.dataset.objectiveType;
     cell.classList.remove("cell--clear-hidden");
     cell.style.backgroundImage = `url("${ADVENTURE_COLLECT_SHELL_ICON}")`;
     cell.classList.add("cell--objective-shell");
@@ -6891,17 +6922,31 @@ export class UIManager {
         // Preview-only mode can restore previous visual snapshot.
         cell.style.backgroundImage = previousBackground;
         cell.classList.toggle("cell--objective", hadObjectiveClass);
+        cell.classList.toggle("cell--objective-core", hadObjectiveCoreClass);
+        cell.classList.toggle("cell--objective-crown", hadObjectiveCrownClass);
         cell.classList.toggle("cell--filled", hadFilledClass);
         if (typeof previousTone === "string") {
           cell.dataset.tone = previousTone;
         } else {
           delete cell.dataset.tone;
         }
+        if (typeof previousObjectiveType === "string") {
+          cell.dataset.objectiveType = previousObjectiveType;
+        } else {
+          delete cell.dataset.objectiveType;
+        }
       } else {
         // Runtime mode: collected objective slot should stay empty after shell breaks.
         cell.style.removeProperty("background-image");
-        cell.classList.remove("cell--objective", "cell--filled", "cell--clear-hidden");
+        cell.classList.remove(
+          "cell--objective",
+          "cell--objective-core",
+          "cell--objective-crown",
+          "cell--filled",
+          "cell--clear-hidden",
+        );
         delete cell.dataset.tone;
+        delete cell.dataset.objectiveType;
       }
       cell.classList.remove("cell--objective-shell");
     };
