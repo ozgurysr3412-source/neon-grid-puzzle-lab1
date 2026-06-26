@@ -125,12 +125,6 @@
     <div class="overlay overlay--visible" id="menu-screen">
       <div class="modal menu-modal">
         <div class="menu-scene" role="img" aria-label="Grid Crown start screen">
-          <button id="menu-remove-ads-btn" class="menu-remove-ads-btn" type="button" aria-label="Remove Ads">
-            <span class="menu-remove-ads-icon" aria-hidden="true">
-              <span class="menu-remove-ads-word">ADS</span>
-              <span class="menu-remove-ads-slash"></span>
-            </span>
-          </button>
           <button id="menu-shop-open-btn" class="menu-shop-open-btn" type="button" aria-label="Open shop">
             <img
               src="./assets/ui/shop/shop-open-icon-cart-new-only.webp?v=20260428shopicon2"
@@ -242,7 +236,7 @@
             <div class="menu-shop-screen__header">
               <button id="menu-shop-close-btn" class="menu-shop-close-btn" type="button" aria-label="Back">&#8249;</button>
               <h2 class="menu-shop-title">Shop</h2>
-              <p class="menu-shop-subtitle">Boost your run with premium power packs</p>
+              <p class="menu-shop-subtitle">Collect daily rewards and keep playing</p>
             </div>
 
             <article class="menu-shop-daily-card menu-shop-daily-card--compact" aria-label="Daily reward">
@@ -273,20 +267,32 @@
               </div>
             </article>
 
-            <section class="menu-shop-packs menu-shop-packs--carousel" aria-label="Power packs">
-              <div class="menu-shop-pack-carousel">
-                <button id="menu-shop-pack-prev-btn" class="menu-shop-pack-arrow" type="button" aria-label="Previous pack">&#8249;</button>
-                <div class="menu-shop-pack-stage">
-                  <img id="menu-shop-pack-image" class="menu-shop-pack-image" src="./assets/ui/shop/starter-pack-clean.webp?v=20260426shop1" alt="Starter Pack" draggable="false" />
+            <article class="menu-shop-daily-card menu-shop-bonus-card" aria-label="Bonus reward">
+              <div class="menu-shop-daily-frame">
+                <div class="menu-shop-daily-top menu-shop-daily-top--meta">
+                  <p class="menu-shop-daily-kicker menu-shop-bonus-kicker">Bonus Reward</p>
+                  <span class="menu-shop-daily-status-pill is-ready">Ad</span>
                 </div>
-                <button id="menu-shop-pack-next-btn" class="menu-shop-pack-arrow" type="button" aria-label="Next pack">&#8250;</button>
+                <div class="menu-shop-daily-chips">
+                  <div class="menu-shop-reward-chip">
+                    <img src="./assets/ui/powers/twist_clean.webp?v=20260423pwr5" alt="" aria-hidden="true" draggable="false" />
+                    <span>Twist</span>
+                    <strong>+2</strong>
+                  </div>
+                  <div class="menu-shop-reward-chip">
+                    <img src="./assets/ui/powers/hammer_clean.webp?v=20260423pwr5" alt="" aria-hidden="true" draggable="false" />
+                    <span>Hammer</span>
+                    <strong>+1</strong>
+                  </div>
+                  <div class="menu-shop-reward-chip">
+                    <img src="./assets/ui/powers/tnt_clean.webp?v=20260423pwr5" alt="" aria-hidden="true" draggable="false" />
+                    <span>TNT</span>
+                    <strong>+1</strong>
+                  </div>
+                </div>
+                <button id="menu-shop-bonus-claim-btn" class="menu-shop-daily-claim-btn" type="button">Watch ad for reward</button>
               </div>
-              <div class="menu-shop-pack-info">
-                <p id="menu-shop-pack-name" class="menu-shop-pack-name">Starter Pack</p>
-                <p id="menu-shop-pack-meta" class="menu-shop-pack-meta">Twist x6 • Hammer x4 • TNT x2</p>
-                <button id="menu-shop-pack-buy-btn" class="menu-shop-pack-buy-btn" type="button">$0.69</button>
-              </div>
-            </section>
+            </article>
           </section>
 
           <section class="menu-brand">
@@ -358,7 +364,6 @@
 
           <div class="settings-actions">
             <button id="settings-resume-btn" class="primary-btn" type="button">Back To Game</button>
-            <button id="settings-remove-ads-btn" class="ghost-btn settings-remove-ads-btn" type="button">Remove Ads</button>
             <button id="settings-badges-btn" class="ghost-btn" type="button">Badges</button>
             <button id="settings-leaderboard-btn" class="ghost-btn" type="button">Leaderboard</button>
             <button id="settings-restart-btn" class="ghost-btn" type="button">Restart Run</button>
@@ -420,7 +425,7 @@
           <a
             class="soft-update-btn soft-update-btn--primary"
             id="soft-update-open-btn"
-            href="https://play.google.com/store/apps/details?id=com.ozgur72.gridcrownblockblast"
+            href="#"
             target="_blank"
             rel="noopener noreferrer"
           >Update</a>
@@ -482,24 +487,6 @@
         <button class="badge-unlock-close-btn" id="badge-unlock-close-btn" type="button">Awesome</button>
       </div>
     </div>
-
-    <div class="overlay overlay--remove-ads" id="remove-ads-modal">
-      <button class="remove-ads-backdrop" id="remove-ads-backdrop" type="button" aria-label="Close remove ads popup"></button>
-      <div class="remove-ads-card" role="dialog" aria-modal="true" aria-label="Remove ads">
-        <p class="modal-kicker">Remove Ads</p>
-        <h2 id="remove-ads-title">Go Ad-Free</h2>
-        <p id="remove-ads-description">
-          Removes in-game banner/interstitial ads.
-          Rewarded ads stay optional for extra rewards.
-        </p>
-        <p class="remove-ads-price" id="remove-ads-price">$1.99 USD</p>
-        <div class="remove-ads-actions">
-          <button id="remove-ads-purchase-btn" class="primary-btn remove-ads-purchase-btn" type="button">Pay $1.99 USD</button>
-          <button id="remove-ads-cancel-btn" class="ghost-btn remove-ads-cancel-btn" type="button">Not Now</button>
-        </div>
-      </div>
-    </div>
-
     <div class="ad-banner-slot" aria-label="Banner ad placeholder"></div>
     <input id="settings-photo-picker" type="file" accept="image/*" hidden />
 
@@ -515,7 +502,7 @@
         measurementId: "G-MM3HSX1BMY",
       };
     </script>
-    <script type="module" src="./src/main.js?v=20260617sizeopt1"></script>
+    <script type="module" src="./src/main.js?v=20260623crown5"></script>
   </body>
 </html>
 

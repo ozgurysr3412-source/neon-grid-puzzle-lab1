@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [source, mainSource] = await Promise.all([
+const normalizeNewlines = (text) => text.replace(/\r\n?/g, "\n");
+
+const [source, mainSource] = (await Promise.all([
   readFile(new URL("../src/ui/uiManager.js", import.meta.url), "utf8"),
   readFile(new URL("../src/main.js", import.meta.url), "utf8"),
-]);
+])).map(normalizeNewlines);
 
 const clearMethod = source.match(/playClearFeedback\(clearedCells\) \{([\s\S]*?)\n  \}\n\n  acquireLineClearTile/)?.[1] ?? "";
 const batchPaintMethod = source.match(/paintLineDominantLines\(rowLines = \[\], colLines = \[\], alreadyPainted = new Set\(\)\) \{([\s\S]*?)\n  \}\n\n  resolveClearedCellDetails/)?.[1] ?? "";

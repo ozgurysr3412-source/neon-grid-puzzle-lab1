@@ -38,7 +38,7 @@ workflows:
       - name: Install CocoaPods
         script: |
           cd ios/App
-          pod install
+          pod install --repo-update
           cd ../..
 
       - name: Apply provisioning profiles to Xcode project
@@ -103,7 +103,7 @@ workflows:
       - name: Install CocoaPods
         script: |
           cd ios/App
-          pod install
+          pod install --repo-update
           cd ../..
 
       - name: Apply provisioning profiles to Xcode project

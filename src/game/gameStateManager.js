@@ -23,6 +23,7 @@ const ADVENTURE_MARKER_CELL_TONE = Object.freeze({
   blue: 101,
   yellow: 102,
   red: 103,
+  crown: 104,
 });
 
 function rotatePieceClockwise(piece) {
@@ -318,14 +319,20 @@ export class GameStateManager {
               iconTargets: {
                 star: Number(this.adventure.objective.iconTargets?.star ?? 0),
                 ruby: Number(this.adventure.objective.iconTargets?.ruby ?? 0),
+                diamond: Number(this.adventure.objective.iconTargets?.diamond ?? 0),
+                crown: Number(this.adventure.objective.iconTargets?.crown ?? 0),
               },
               iconRemaining: {
                 star: Number(this.adventure.objective.iconRemaining?.star ?? 0),
                 ruby: Number(this.adventure.objective.iconRemaining?.ruby ?? 0),
+                diamond: Number(this.adventure.objective.iconRemaining?.diamond ?? 0),
+                crown: Number(this.adventure.objective.iconRemaining?.crown ?? 0),
               },
               iconCollected: {
                 star: Number(this.adventure.objective.iconCollected?.star ?? 0),
                 ruby: Number(this.adventure.objective.iconCollected?.ruby ?? 0),
+                diamond: Number(this.adventure.objective.iconCollected?.diamond ?? 0),
+                crown: Number(this.adventure.objective.iconCollected?.crown ?? 0),
               },
             }
             : null,
@@ -1080,10 +1087,14 @@ export class GameStateManager {
     const iconRemaining = {
       star: Math.max(0, Number(scoreObjective.iconRemaining?.star ?? 0)),
       ruby: Math.max(0, Number(scoreObjective.iconRemaining?.ruby ?? 0)),
+      diamond: Math.max(0, Number(scoreObjective.iconRemaining?.diamond ?? 0)),
+      crown: Math.max(0, Number(scoreObjective.iconRemaining?.crown ?? 0)),
     };
     const iconCollected = {
       star: Math.max(0, Number(scoreObjective.iconCollected?.star ?? 0)),
       ruby: Math.max(0, Number(scoreObjective.iconCollected?.ruby ?? 0)),
+      diamond: Math.max(0, Number(scoreObjective.iconCollected?.diamond ?? 0)),
+      crown: Math.max(0, Number(scoreObjective.iconCollected?.crown ?? 0)),
     };
 
     this.adventure.markers.forEach((marker) => {
@@ -1100,7 +1111,7 @@ export class GameStateManager {
         const iconType =
           marker.iconType
           ?? (marker.type === "yellow" ? "star" : (marker.type === "red" ? "ruby" : null));
-        if (iconType === "star" || iconType === "ruby") {
+        if (["star", "ruby", "diamond", "crown"].includes(iconType)) {
           if (iconRemaining[iconType] > 0) {
             iconRemaining[iconType] -= 1;
           }
@@ -1123,7 +1134,7 @@ export class GameStateManager {
       const iconType =
         marker.iconType
         ?? (marker.type === "yellow" ? "star" : (marker.type === "red" ? "ruby" : null));
-      return count + ((iconType === "star" || iconType === "ruby") ? 1 : 0);
+      return count + (["star", "ruby", "diamond", "crown"].includes(iconType) ? 1 : 0);
     }, 0);
     if (iconsCollectedThisMove > 0) {
       this.runIconsCollected += iconsCollectedThisMove;
@@ -1159,12 +1170,14 @@ export class GameStateManager {
     const iconTargets = {
       star: Math.max(0, Math.floor(Number(this.adventure.objective.iconTargets?.star) || 0)),
       ruby: Math.max(0, Math.floor(Number(this.adventure.objective.iconTargets?.ruby) || 0)),
+      diamond: Math.max(0, Math.floor(Number(this.adventure.objective.iconTargets?.diamond) || 0)),
+      crown: Math.max(0, Math.floor(Number(this.adventure.objective.iconTargets?.crown) || 0)),
     };
     this.adventure.objective.timeLimitSec = limitSec;
     this.adventure.objective.deadlineAtMs = now + (limitSec * 1000);
     this.adventure.objective.iconTargets = iconTargets;
     this.adventure.objective.iconRemaining = { ...iconTargets };
-    this.adventure.objective.iconCollected = { star: 0, ruby: 0 };
+    this.adventure.objective.iconCollected = { star: 0, ruby: 0, diamond: 0, crown: 0 };
     this.adventureTimerLastSecond = Math.max(0, limitSec);
   }
 
@@ -1217,7 +1230,9 @@ export class GameStateManager {
     }
     const remaining = objective.iconRemaining ?? objective.iconTargets ?? {};
     return Math.max(0, Number(remaining.star) || 0) <= 0
-      && Math.max(0, Number(remaining.ruby) || 0) <= 0;
+      && Math.max(0, Number(remaining.ruby) || 0) <= 0
+      && Math.max(0, Number(remaining.diamond) || 0) <= 0
+      && Math.max(0, Number(remaining.crown) || 0) <= 0;
   }
 
   getAdventureTimerRemainingMs(now = performance.now()) {

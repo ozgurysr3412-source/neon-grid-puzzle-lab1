@@ -9,14 +9,13 @@ import { getAdventureLevelCount } from "./meta/adventureMode.js";
 import { evaluateAchievements } from "./meta/achievements.js";
 import { ProgressionManager } from "./meta/progressionManager.js";
 import { createAdMobService } from "./platform/adMobService.js";
+import { createAppTrackingTransparencyService } from "./platform/appTrackingTransparencyService.js";
 import { createInAppReviewService } from "./platform/inAppReviewService.js";
 import { createLocalNotificationService } from "./platform/localNotificationService.js";
-import { createPlayBillingService } from "./platform/playBillingService.js";
 import { mountJourneyScreenPartial } from "./ui/journey/journeyScreenPartial.js";
 import {
   applyStaticTranslations,
   detectAndApplyLocale,
-  getPackLocalizedText,
   t,
 } from "./ui/localization.js";
 import { UIManager } from "./ui/uiManager.js?v=logo-fast-1";
@@ -696,10 +695,8 @@ if ("serviceWorker" in navigator) {
 }
 
 const SETTINGS_STORAGE_KEY = "neon-grid-forge-settings-v1";
-const REMOVE_ADS_STORAGE_KEY = "neon-grid-remove-ads-v1";
 const PHOTO_BOARD_IMAGE_STORAGE_KEY = "neon-grid-photo-board-image-v1";
 const SHOP_DAILY_REWARD_LAST_CLAIM_KEY = "neon-grid-shop-daily-last-claim-v1";
-const SHOP_PACK_GRANTED_TOKENS_STORAGE_KEY = "neon-grid-shop-pack-granted-tokens-v1";
 const REWARDED_CONTINUE_USAGE_STORAGE_KEY = "neon-grid-rewarded-continue-usage-v1";
 const GAMEOVER_INTERSTITIAL_COUNTER_STORAGE_KEY = "neon-grid-gameover-interstitial-counter-v1";
 const RATE_US_PROMPT_STORAGE_KEY = "neon-grid-rate-us-prompt-v1";
@@ -708,24 +705,17 @@ const ONBOARDING_SHOP_REWARD_PENDING_STORAGE_KEY = "neon-grid-onboarding-shop-re
 const LEADERBOARD_PROFILE_STORAGE_KEY = "neon-grid-leaderboard-profile-v1";
 const LEADERBOARD_PLAYER_ID_STORAGE_KEY = "neon-grid-leaderboard-player-id-v1";
 const LEADERBOARD_FIREBASE_CONFIG_STORAGE_KEY = "neon-grid-firebase-config-v1";
-const REMOVE_ADS_PRICE_USD = "$1.99 USD";
-const REMOVE_ADS_PRODUCT_ID = "remove_ads";
-const SHOP_BILLING_PRODUCT_IDS = Object.freeze({
-  starter: "starter_pack",
-  value: "value_pack",
-  "best-value": "best_value_pack",
-  big: "big_pack",
-});
 const REWARDED_CONTINUE_DAILY_LIMIT = 5;
 const CRITICAL_SFX_MIN_GAP_MS = 900;
 const RATE_US_MIN_RUN_DURATION_MS = 45000;
 const RATE_US_MIN_TURNS = 8;
 const RATE_US_MIN_SCORE = 300;
 const ONBOARDING_BOARD_DEMO_ENABLED = false;
-const APP_VERSION_CODE = 19;
+const SOFT_UPDATE_PROMPT_ENABLED = false;
+const APP_VERSION_CODE = 20;
 const UPDATE_CONFIG_COLLECTION = "gridcrown_app_config";
-const UPDATE_CONFIG_DOCUMENT = "android";
-const DEFAULT_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.ozgur72.gridcrownblockblast";
+const UPDATE_CONFIG_DOCUMENT = "ios";
+const DEFAULT_UPDATE_URL = "#";
 const ADMOB_USE_TEST_ADS = false;
 const ADMOB_ANDROID_APP_ID = ADMOB_USE_TEST_ADS
   ? "ca-app-pub-3940256099942544~3347511713"
@@ -793,6 +783,70 @@ const AD_FLOW_TEST_PANEL_ENABLED = (() => {
   try {
     const params = new URLSearchParams(window.location.search || "");
     return params.get("adPanel") === "1" || params.get("panel") === "ads";
+  } catch {
+    return false;
+  }
+})();
+const AD_PRIVACY_DEBUG_PARAMS = (() => {
+  try {
+    return new URLSearchParams(window.location.search || "");
+  } catch {
+    return new URLSearchParams();
+  }
+})();
+const AD_PRIVACY_DEBUG_ENABLED = (
+  AD_PRIVACY_DEBUG_PARAMS.get("adConsentReset") === "1" ||
+  AD_PRIVACY_DEBUG_PARAMS.has("adConsentGeo") ||
+  AD_PRIVACY_DEBUG_PARAMS.get("adInspector") === "1" ||
+  AD_PRIVACY_DEBUG_PARAMS.get("adConsentInfo") === "1" ||
+  AD_PRIVACY_DEBUG_PARAMS.get("adPrivacyPanel") === "1"
+);
+const ADMOB_CONSENT_DEBUG_GEOGRAPHY = (() => {
+  try {
+    const raw = String(AD_PRIVACY_DEBUG_PARAMS.get("adConsentGeo") || AD_PRIVACY_DEBUG_PARAMS.get("consentGeo") || "").trim().toLowerCase();
+    if (!raw) {
+      return null;
+    }
+    const map = new Map([
+      ["disabled", 0],
+      ["eea", 1],
+      ["not_eea", 2],
+      ["not-eea", 2],
+      ["non_eea", 2],
+      ["non-eea", 2],
+      ["us", 3],
+      ["usa", 3],
+      ["other", 4],
+    ]);
+    if (map.has(raw)) {
+      return map.get(raw);
+    }
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) ? numeric : null;
+  } catch {
+    return null;
+  }
+})();
+const ADMOB_CONSENT_TEST_DEVICE_IDS = (() => {
+  try {
+    return String(AD_PRIVACY_DEBUG_PARAMS.get("adConsentTestDevice") || AD_PRIVACY_DEBUG_PARAMS.get("consentTestDevice") || "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+})();
+const ADMOB_RESET_CONSENT_ON_INIT = (() => {
+  try {
+    return AD_PRIVACY_DEBUG_ENABLED && (AD_PRIVACY_DEBUG_PARAMS.get("adConsentReset") === "1" || AD_PRIVACY_DEBUG_PARAMS.get("resetConsent") === "1");
+  } catch {
+    return false;
+  }
+})();
+const ADMOB_OPEN_AD_INSPECTOR_ON_INIT = (() => {
+  try {
+    return AD_PRIVACY_DEBUG_ENABLED && AD_PRIVACY_DEBUG_PARAMS.get("adInspector") === "1";
   } catch {
     return false;
   }
@@ -870,6 +924,7 @@ ui.setBoardFrameFxDisabled(true);
 const audio = new SoundManager();
 void audio.prewarmForGameplay?.();
 const haptics = new Haptics();
+const appTrackingTransparencyService = createAppTrackingTransparencyService();
 const powerHub = initPowerHubUi({ state, ui });
 const smartPraiseState = {
   lastTurn: -99,
@@ -913,52 +968,6 @@ const SHOP_COMEBACK_REMINDER_HOUR = 14;
 const SHOP_COMEBACK_REMINDER_MIN_DELAY_MS = 2 * 60 * 60 * 1000;
 const SHOP_COMEBACK_REMINDER_TITLE = "Grid Crown seni bekliyor 👑";
 const SHOP_COMEBACK_REMINDER_BODY = "Bugunun hedefini tamamla ve serini bozma. Hemen geri don!";
-const SHOP_PACKS = Object.freeze([
-  {
-    id: "starter",
-    productId: SHOP_BILLING_PRODUCT_IDS.starter,
-    consumeAfterPurchase: true,
-    name: "Starter Pack",
-    meta: "Twist x6 • Hammer x4 • TNT x2",
-    priceLabel: "$0.69",
-    rewards: { twist: 6, hammer: 4, tnt: 2 },
-    includesRemoveAds: false,
-    image: "./assets/ui/shop/starter-pack-clean.webp?v=20260426shop1",
-  },
-  {
-    id: "value",
-    productId: SHOP_BILLING_PRODUCT_IDS.value,
-    consumeAfterPurchase: true,
-    name: "Value Pack",
-    meta: "Twist x14 • Hammer x9 • TNT x5",
-    priceLabel: "$1.29",
-    rewards: { twist: 14, hammer: 9, tnt: 5 },
-    includesRemoveAds: false,
-    image: "./assets/ui/shop/value-pack-clean.webp?v=20260426shop1",
-  },
-  {
-    id: "best-value",
-    productId: SHOP_BILLING_PRODUCT_IDS["best-value"],
-    consumeAfterPurchase: true,
-    name: "Best Value Pack",
-    meta: "Twist x30 • Hammer x18 • TNT x10",
-    priceLabel: "$2.49",
-    rewards: { twist: 30, hammer: 18, tnt: 10 },
-    includesRemoveAds: false,
-    image: "./assets/ui/shop/best-value-pack-clean.webp?v=20260426shop1",
-  },
-  {
-    id: "big",
-    productId: SHOP_BILLING_PRODUCT_IDS.big,
-    consumeAfterPurchase: false,
-    name: "Big Pack",
-    meta: "Twist x70 • Hammer x40 • TNT x24 • Remove Ads Included",
-    priceLabel: "$4.99",
-    rewards: { twist: 70, hammer: 40, tnt: 24 },
-    includesRemoveAds: true,
-    image: "./assets/ui/shop/big-pack-clean.webp?v=20260426shop1",
-  },
-]);
 const LEADERBOARD_SEED_COUNTRY_PROFILES = Object.freeze([
   { code: "TR", firstNames: ["Mert", "Arda", "Kerem", "Ece", "Elif", "Deniz", "Berk", "Selin", "Can", "Aylin"], lastNames: ["Yilmaz", "Kaya", "Demir", "Sahin", "Aydin", "Arslan", "Koc", "Celik", "Kurt", "Ozturk"] },
   { code: "US", firstNames: ["Liam", "Noah", "Mason", "Emma", "Ava", "Olivia", "Ethan", "Mia", "Logan", "Chloe"], lastNames: ["Smith", "Johnson", "Brown", "Davis", "Miller", "Wilson", "Moore", "Taylor", "Anderson", "Thomas"] },
@@ -2167,7 +2176,10 @@ function closeSoftUpdatePrompt() {
   modal?.setAttribute("aria-hidden", "true");
 }
 
-function openSoftUpdatePrompt({ updateUrl = DEFAULT_PLAY_STORE_URL, title = "", message = "" } = {}) {
+function openSoftUpdatePrompt({ updateUrl = DEFAULT_UPDATE_URL, title = "", message = "" } = {}) {
+  if (!SOFT_UPDATE_PROMPT_ENABLED) {
+    return false;
+  }
   const modal = document.getElementById("soft-update-modal");
   const openButton = document.getElementById("soft-update-open-btn");
   const titleElement = document.getElementById("soft-update-title");
@@ -2175,14 +2187,14 @@ function openSoftUpdatePrompt({ updateUrl = DEFAULT_PLAY_STORE_URL, title = "", 
   if (!(modal instanceof HTMLElement) || !(openButton instanceof HTMLAnchorElement)) {
     return false;
   }
-  let safeUrl = DEFAULT_PLAY_STORE_URL;
+  let safeUrl = DEFAULT_UPDATE_URL;
   try {
-    const candidate = new URL(String(updateUrl || DEFAULT_PLAY_STORE_URL));
-    if (candidate.protocol === "https:" && candidate.hostname === "play.google.com") {
+    const candidate = new URL(String(updateUrl || DEFAULT_UPDATE_URL));
+    if (candidate.protocol === "https:") {
       safeUrl = candidate.href;
     }
   } catch {
-    safeUrl = DEFAULT_PLAY_STORE_URL;
+    safeUrl = DEFAULT_UPDATE_URL;
   }
   openButton.href = safeUrl;
   if (title && titleElement) {
@@ -2677,22 +2689,6 @@ async function buildPhotoBoardTiles(dataUrl, {
   return tiles;
 }
 
-function loadRemoveAdsUnlocked() {
-  try {
-    return localStorage.getItem(REMOVE_ADS_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function saveRemoveAdsUnlocked(enabled) {
-  try {
-    localStorage.setItem(REMOVE_ADS_STORAGE_KEY, enabled ? "1" : "0");
-  } catch {
-    // Ignore storage write failures.
-  }
-}
-
 function loadShopDailyLastClaimAtMs() {
   try {
     const raw = Number(localStorage.getItem(SHOP_DAILY_REWARD_LAST_CLAIM_KEY) || 0);
@@ -2712,78 +2708,6 @@ function saveShopDailyLastClaimAtMs(value) {
   } catch {
     // Ignore storage write failures.
   }
-}
-
-function loadShopPackGrantedTokens() {
-  try {
-    const raw = localStorage.getItem(SHOP_PACK_GRANTED_TOKENS_STORAGE_KEY);
-    if (!raw) {
-      return {};
-    }
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") {
-      return {};
-    }
-    const safe = {};
-    for (const [packId, tokenList] of Object.entries(parsed)) {
-      if (!Array.isArray(tokenList)) {
-        continue;
-      }
-      const normalizedPackId = String(packId || "").trim();
-      if (!normalizedPackId) {
-        continue;
-      }
-      const dedupedTokens = [...new Set(
-        tokenList
-          .map((entry) => String(entry || "").trim())
-          .filter(Boolean),
-      )].slice(-40);
-      if (dedupedTokens.length > 0) {
-        safe[normalizedPackId] = dedupedTokens;
-      }
-    }
-    return safe;
-  } catch {
-    return {};
-  }
-}
-
-function saveShopPackGrantedTokens(tokensByPack) {
-  try {
-    localStorage.setItem(
-      SHOP_PACK_GRANTED_TOKENS_STORAGE_KEY,
-      JSON.stringify(tokensByPack && typeof tokensByPack === "object" ? tokensByPack : {}),
-    );
-  } catch {
-    // Ignore storage write failures.
-  }
-}
-
-function hasGrantedShopPackPurchaseToken(tokensByPack, packId, token) {
-  const normalizedPackId = String(packId || "").trim();
-  const normalizedToken = String(token || "").trim();
-  if (!normalizedPackId || !normalizedToken) {
-    return false;
-  }
-  return Array.isArray(tokensByPack?.[normalizedPackId])
-    && tokensByPack[normalizedPackId].includes(normalizedToken);
-}
-
-function rememberGrantedShopPackPurchaseToken(tokensByPack, packId, token) {
-  const normalizedPackId = String(packId || "").trim();
-  const normalizedToken = String(token || "").trim();
-  if (!normalizedPackId || !normalizedToken) {
-    return tokensByPack;
-  }
-  const next = {
-    ...(tokensByPack && typeof tokensByPack === "object" ? tokensByPack : {}),
-  };
-  const current = Array.isArray(next[normalizedPackId]) ? next[normalizedPackId] : [];
-  if (current.includes(normalizedToken)) {
-    return next;
-  }
-  next[normalizedPackId] = [...current, normalizedToken].slice(-40);
-  return next;
 }
 
 function getLocalDayKey(now = Date.now()) {
@@ -3021,11 +2945,7 @@ async function buildLeaderboardData(snapshot, profile, { syncScores = true } = {
 }
 
 const runtimeSettings = loadRuntimeSettings();
-let removeAdsUnlocked = loadRemoveAdsUnlocked();
-if (SCREENSHOT_MODE) {
-  // Screenshot mode: hide monetization UI and keep capture flow clean.
-  removeAdsUnlocked = true;
-}
+let adDisplayPausedForTest = false;
 let leaderboardProfile = loadLeaderboardProfile();
 let shopDailyLastClaimAtMs = loadShopDailyLastClaimAtMs();
 let rewardedContinueUsage = loadRewardedContinueUsage();
@@ -3033,20 +2953,14 @@ let gameOverInterstitialCounter = loadGameOverInterstitialCounter();
 let rateUsPromptState = loadRateUsPromptState();
 let shopCountdownIntervalId = 0;
 let menuShopViewOpen = false;
-let menuShopPackIndex = 0;
-let menuShopPackPurchaseInFlight = false;
-let removeAdsModalSource = "menu";
-let removeAdsModalPurchaseInFlight = false;
-let removeAdsPriceLabel = REMOVE_ADS_PRICE_USD;
-const shopPackStorePriceLabels = new Map();
-let shopPackGrantedTokens = loadShopPackGrantedTokens();
-const SHOP_PACKS_BY_ID = new Map(SHOP_PACKS.map((pack) => [pack.id, pack]));
+let menuShopBonusRewardInFlight = false;
 let gameplayBannerVisible = false;
 let pendingMilestoneUnlock = null;
 let achievementUnlockTracker = null;
 let mascotReaction = null;
 let audioPreloadRequested = false;
 let audioInteractionPrimed = false;
+
 let gameOverInterstitialHandled = false;
 let gameOverInterstitialPromise = null;
 let gameOverInterstitialInFlight = false;
@@ -3067,17 +2981,151 @@ const adMobService = createAdMobService({
   rewardedAdId: ADMOB_ACTIVE_IDS.rewardedAdId,
   interstitialCooldownMs: 0,
   testing: ADMOB_USE_TEST_ADS,
+  consentDebugGeography: ADMOB_CONSENT_DEBUG_GEOGRAPHY,
+  consentTestDeviceIdentifiers: ADMOB_CONSENT_TEST_DEVICE_IDS,
+  resetConsentOnInitialize: false,
+  openAdInspectorOnInitialize: false,
 });
+window.GridCrownAds = {
+  getConsentInfo: () => adMobService.getConsentInfo(),
+  isConsentReady: () => adMobService.isConsentReady(),
+  getDiagnostics: () => adMobService.getDiagnostics(),
+  runConsentDebug: (options) => adMobService.runConsentDebug(options),
+  openAdInspector: () => adMobService.openAdInspector(),
+};
+
+function getAdPrivacyDebugRows() {
+  const diagnostics = adMobService.getDiagnostics();
+  const info = diagnostics.consentInfo || {};
+  const unity = diagnostics.unityPrivacy || {};
+  return {
+    "Platform": diagnostics.platform || "web",
+    "UMP status": info.status || "unknown",
+    "Can request ads?": info.canRequestAds === true ? "yes" : "no",
+    "Unity GDPR consent": unity.gdprConsent === true ? "true" : unity.gdprConsent === false ? "false" : "unknown",
+    "Unity privacy consent": unity.privacyConsent === true ? "true" : unity.privacyConsent === false ? "false" : "unknown",
+    "Unity metadata set?": unity.set === true ? "yes" : unity.set === false ? "no" : "unknown",
+    "Ad Inspector available?": diagnostics.adInspectorAvailable === true ? "yes" : "no",
+    "Last ad init status": diagnostics.lastAdInitStatus || "not-started",
+  };
+}
+
+function logAdPrivacyDebug(message, data = null) {
+  const prefix = "[ad-privacy-debug]";
+  if (data) {
+    console.info(prefix, message, data);
+  } else {
+    console.info(prefix, message);
+  }
+  const logEl = document.getElementById("ad-privacy-debug-log");
+  if (logEl) {
+    logEl.textContent = data
+      ? `${message}\n${JSON.stringify(data, null, 2)}`
+      : message;
+  }
+}
+
+function updateAdPrivacyDebugPanel() {
+  if (!AD_PRIVACY_DEBUG_ENABLED) {
+    return;
+  }
+  const panel = document.getElementById("ad-privacy-debug-panel");
+  if (!panel) {
+    return;
+  }
+  const rows = getAdPrivacyDebugRows();
+  Object.entries(rows).forEach(([label, value]) => {
+    const target = panel.querySelector(`[data-ad-privacy-row="${label}"]`);
+    if (target) {
+      target.textContent = String(value);
+    }
+  });
+}
+
+function mountAdPrivacyDebugPanel() {
+  if (!AD_PRIVACY_DEBUG_ENABLED || document.getElementById("ad-privacy-debug-panel")) {
+    return;
+  }
+  const panel = document.createElement("aside");
+  panel.id = "ad-privacy-debug-panel";
+  panel.className = "combo-test-panel ad-privacy-debug-panel";
+  const rows = getAdPrivacyDebugRows();
+  panel.innerHTML = `
+    <div class="combo-test-panel__header">
+      <span>Ad Privacy Debug</span>
+      <button type="button" data-ad-privacy-close aria-label="Close ad privacy debug panel">x</button>
+    </div>
+    <p class="combo-test-panel__note">Internal test only. Normal players never see this without debug URL params.</p>
+    <div class="ad-privacy-debug-grid">
+      ${Object.entries(rows).map(([label, value]) => `
+        <span>${label}</span>
+        <strong data-ad-privacy-row="${label}">${value}</strong>
+      `).join("")}
+    </div>
+    <pre id="ad-privacy-debug-log" class="ad-privacy-debug-log">Waiting for debug action...</pre>
+  `;
+  panel.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (button instanceof HTMLButtonElement && button.hasAttribute("data-ad-privacy-close")) {
+      panel.classList.add("is-hidden");
+    }
+  });
+  document.body.appendChild(panel);
+}
+
+async function runAdPrivacyDebugActions() {
+  if (!AD_PRIVACY_DEBUG_ENABLED) {
+    return;
+  }
+  mountAdPrivacyDebugPanel();
+  updateAdPrivacyDebugPanel();
+
+  const wantsConsentReset = ADMOB_RESET_CONSENT_ON_INIT;
+  const wantsConsentInfo = AD_PRIVACY_DEBUG_PARAMS.get("adConsentInfo") === "1";
+  const wantsInspector = ADMOB_OPEN_AD_INSPECTOR_ON_INIT;
+  const hasConsentGeo = AD_PRIVACY_DEBUG_PARAMS.has("adConsentGeo") || AD_PRIVACY_DEBUG_PARAMS.has("consentGeo");
+  const isNativeAdPrivacySupported = ["android", "ios"].includes(ADMOB_PLATFORM) && adMobService.isSupported();
+
+  if (!isNativeAdPrivacySupported) {
+    logAdPrivacyDebug(
+      wantsInspector
+        ? "Ad Inspector only works inside Android app."
+        : "Native ad privacy controls only work inside native app.",
+      adMobService.getDiagnostics(),
+    );
+    updateAdPrivacyDebugPanel();
+    return;
+  }
+
+  if (wantsConsentReset || wantsConsentInfo || hasConsentGeo) {
+    const result = await adMobService.runConsentDebug({
+      reset: wantsConsentReset,
+      debugGeography: ADMOB_CONSENT_DEBUG_GEOGRAPHY,
+      testDeviceIdentifiers: ADMOB_CONSENT_TEST_DEVICE_IDS,
+      showForm: wantsConsentReset || hasConsentGeo,
+    });
+    logAdPrivacyDebug(
+      wantsConsentReset
+        ? "Consent reset/debug flow completed."
+        : "Consent info refreshed.",
+      result,
+    );
+    updateAdPrivacyDebugPanel();
+  }
+
+  if (wantsInspector) {
+    const initialized = await adMobService.initialize();
+    const opened = initialized && ADMOB_PLATFORM === "android"
+      ? await adMobService.openAdInspector()
+      : false;
+    logAdPrivacyDebug(
+      opened ? "Ad Inspector opened." : "Ad Inspector could not be opened.",
+      adMobService.getDiagnostics(),
+    );
+    updateAdPrivacyDebugPanel();
+  }
+}
 const inAppReviewService = createInAppReviewService();
-const playBillingService = createPlayBillingService({
-  productId: REMOVE_ADS_PRODUCT_ID,
-});
-const shopPackBillingServices = new Map(
-  SHOP_PACKS.map((pack) => [pack.id, createPlayBillingService({
-    productId: pack.productId,
-    consumeAfterPurchase: pack.consumeAfterPurchase === true,
-  })]),
-);
 const localNotificationService = createLocalNotificationService({
   rewardIntervalMs: SHOP_DAILY_REWARD_INTERVAL_MS,
   fallbackHour: SHOP_DAILY_REWARD_FALLBACK_HOUR,
@@ -3180,28 +3228,10 @@ async function rebuildClassicPhotoBoardTiles(dataUrl, { inputBytes = 0 } = {}) {
   syncClassicPhotoBoardSettingsUi();
 }
 
-function syncRemoveAdsButtons() {
-  const menuBtn = document.getElementById("menu-remove-ads-btn");
-  const menuLabel = menuBtn?.querySelector(".menu-remove-ads-label");
+function syncMonetizationUiState() {
   const menuShopBtn = document.getElementById("menu-shop-open-btn");
-  const settingsBtn = document.getElementById("settings-remove-ads-btn");
-  if (menuBtn) {
-    menuBtn.classList.toggle("is-hidden", removeAdsUnlocked);
-    menuBtn.classList.toggle("is-active", removeAdsUnlocked);
-    menuBtn.setAttribute("aria-pressed", removeAdsUnlocked ? "true" : "false");
-    menuBtn.setAttribute("aria-label", removeAdsUnlocked ? t("ads_removed") : t("remove_ads"));
-    menuBtn.hidden = removeAdsUnlocked;
-  }
   if (menuShopBtn) {
-    menuShopBtn.classList.toggle("menu-shop-open-btn--ads-hidden", removeAdsUnlocked);
-  }
-  if (menuLabel) {
-    menuLabel.textContent = removeAdsUnlocked ? t("ads_removed") : t("remove_ads");
-  }
-  if (settingsBtn) {
-    settingsBtn.classList.toggle("is-active", removeAdsUnlocked);
-    settingsBtn.textContent = removeAdsUnlocked ? t("ads_removed") : t("remove_ads");
-    settingsBtn.setAttribute("aria-pressed", removeAdsUnlocked ? "true" : "false");
+    menuShopBtn.classList.remove("menu-shop-open-btn--ads-hidden");
   }
 }
 
@@ -3327,7 +3357,7 @@ async function maybeRequestRateUsAfterGameOver(snapshot, { source = "gameover" }
 }
 
 function recordGameOverForInterstitialCycle() {
-  if (removeAdsUnlocked) {
+  if (adDisplayPausedForTest) {
     return;
   }
   gameOverInterstitialCounter = Math.max(0, gameOverInterstitialCounter + 1);
@@ -3335,7 +3365,7 @@ function recordGameOverForInterstitialCycle() {
 }
 
 function shouldShowGameOverInterstitial() {
-  return !removeAdsUnlocked && !gameOverInterstitialHandled;
+  return !adDisplayPausedForTest && !gameOverInterstitialHandled;
 }
 
 function waitForMs(ms) {
@@ -3345,7 +3375,7 @@ function waitForMs(ms) {
 }
 
 async function showGameOverInterstitialNow() {
-  if (removeAdsUnlocked) {
+  if (adDisplayPausedForTest) {
     return false;
   }
   if (AD_FLOW_TEST_PANEL_ENABLED) {
@@ -3476,25 +3506,24 @@ function setPendingOnboardingShopReward(value = true) {
 }
 
 function shouldStartOnboardingShopRewardGuide() {
+  setPendingOnboardingShopReward(false);
   if (SCREENSHOT_MODE || AUTO_OPEN_JOURNEY) {
     return false;
   }
   if (ONBOARDING_DEMO_PREVIEW || RESET_ONBOARDING_DEMO) {
     setOnboardingDemoCompleted(true);
-    setPendingOnboardingShopReward(true);
     shopDailyLastClaimAtMs = 0;
     saveShopDailyLastClaimAtMs(shopDailyLastClaimAtMs);
-    return true;
+    return false;
   }
   if (hasExistingPlayerProgressForOnboarding()) {
     setOnboardingDemoCompleted(true);
-    return hasPendingOnboardingShopReward();
+    return false;
   }
   if (!hasCompletedOnboardingDemo()) {
     setOnboardingDemoCompleted(true);
-    setPendingOnboardingShopReward(true);
   }
-  return hasPendingOnboardingShopReward();
+  return false;
 }
 
 function cloneCatalogPieceForDemo(id, tone) {
@@ -3821,7 +3850,7 @@ function advanceOnboardingDemoStage() {
     runtime.active = false;
     clearOnboardingDemoGuide();
     setOnboardingDemoCompleted(true);
-    setPendingOnboardingShopReward(true);
+    setPendingOnboardingShopReward(false);
     window.setTimeout(() => {
       ui.spawnFloatingText?.("Ready!", "combo");
     }, 260);
@@ -3832,7 +3861,6 @@ function advanceOnboardingDemoStage() {
       approvalState.lastTurn = -99;
       approvalState.lastAtMs = 0;
       state.goToMenu();
-      startOnboardingShopRewardGuide();
     }, 1250);
     return;
   }
@@ -3846,8 +3874,7 @@ function advanceOnboardingDemoStage() {
 function startOnboardingDemoPreview() {
   if (!ONBOARDING_BOARD_DEMO_ENABLED) {
     setOnboardingDemoCompleted(true);
-    setPendingOnboardingShopReward(true);
-    startOnboardingShopRewardGuide();
+    setPendingOnboardingShopReward(false);
     return;
   }
   if (RESET_ONBOARDING_DEMO) {
@@ -3884,48 +3911,8 @@ function startOnboardingDemoPreview() {
   window.setTimeout(showOnboardingDemoGuide, 180);
 }
 
-function getRemoveAdsModalElements() {
-  return {
-    modal: document.getElementById("remove-ads-modal"),
-    backdrop: document.getElementById("remove-ads-backdrop"),
-    title: document.getElementById("remove-ads-title"),
-    description: document.getElementById("remove-ads-description"),
-    price: document.getElementById("remove-ads-price"),
-    purchaseBtn: document.getElementById("remove-ads-purchase-btn"),
-    cancelBtn: document.getElementById("remove-ads-cancel-btn"),
-  };
-}
-
-function getRemoveAdsPriceLabel() {
-  const label = String(removeAdsPriceLabel || "").trim();
-  if (label) {
-    return label;
-  }
-  return REMOVE_ADS_PRICE_USD;
-}
-
-function setRemoveAdsModalMessage(message) {
-  const { description } = getRemoveAdsModalElements();
-  if (!(description instanceof HTMLElement)) {
-    return;
-  }
-  description.textContent = String(message || "").trim();
-}
-
-async function refreshRemoveAdsStorePrice() {
-  if (!playBillingService.isSupported()) {
-    removeAdsPriceLabel = REMOVE_ADS_PRICE_USD;
-    syncRemoveAdsModalUi();
-    return;
-  }
-  const details = await playBillingService.refreshProductDetails();
-  const storePrice = details?.formattedPrice || playBillingService.getDisplayPrice();
-  removeAdsPriceLabel = storePrice ? `${storePrice}` : REMOVE_ADS_PRICE_USD;
-  syncRemoveAdsModalUi();
-}
-
 function shouldShowGameplayBanner(snapshot = state.getSnapshot()) {
-  if (removeAdsUnlocked) {
+  if (adDisplayPausedForTest) {
     return false;
   }
   const status = snapshot?.status ?? "menu";
@@ -3938,12 +3925,12 @@ function syncGameplayBannerVisibility(snapshot = state.getSnapshot()) {
   const shell = document.getElementById("game-shell");
   const bannerSlot = document.querySelector(".ad-banner-slot");
   const nextVisible = shouldShowGameplayBanner(snapshot);
-  const forceHide = removeAdsUnlocked === true;
+  const forceHide = adDisplayPausedForTest === true;
   const canUseNativeBanner = adMobService.isConfigured() && adMobService.isSupported();
   const shouldRenderBanner = !forceHide && nextVisible && canUseNativeBanner;
-  root?.classList.toggle("ads-disabled", removeAdsUnlocked);
-  body?.classList.toggle("ads-disabled", removeAdsUnlocked);
-  shell?.classList.toggle("ads-disabled", removeAdsUnlocked);
+  root?.classList.toggle("ads-disabled", adDisplayPausedForTest);
+  body?.classList.toggle("ads-disabled", adDisplayPausedForTest);
+  shell?.classList.toggle("ads-disabled", adDisplayPausedForTest);
   shell?.classList.toggle("has-banner", shouldRenderBanner);
   if (shell) {
     if (forceHide || !canUseNativeBanner) {
@@ -3967,61 +3954,6 @@ function syncGameplayBannerVisibility(snapshot = state.getSnapshot()) {
   void adMobService.setBannerVisible(shouldRenderBanner);
 }
 
-function syncRemoveAdsModalUi() {
-  const { title, description, price, purchaseBtn, cancelBtn } = getRemoveAdsModalElements();
-  if (price) {
-    price.textContent = getRemoveAdsPriceLabel();
-  }
-  if (removeAdsUnlocked) {
-    if (title) {
-      title.textContent = t("ads_removed");
-    }
-    if (description) {
-      description.textContent = t("remove_ads_desc_active");
-    }
-    if (purchaseBtn) {
-      purchaseBtn.textContent = t("already_active");
-      purchaseBtn.disabled = true;
-    }
-    if (cancelBtn) {
-      cancelBtn.textContent = t("close");
-    }
-    return;
-  }
-  if (title) {
-    title.textContent = t("remove_ads_title");
-  }
-  if (description) {
-    description.textContent = t("remove_ads_desc_offer");
-  }
-  if (purchaseBtn) {
-    purchaseBtn.textContent = removeAdsModalPurchaseInFlight
-      ? t("processing")
-      : t("pay", { price: getRemoveAdsPriceLabel() });
-    purchaseBtn.disabled = removeAdsModalPurchaseInFlight;
-  }
-  if (cancelBtn) {
-    cancelBtn.textContent = removeAdsModalPurchaseInFlight ? t("wait") : t("not_now");
-    cancelBtn.disabled = removeAdsModalPurchaseInFlight;
-  }
-}
-
-function closeRemoveAdsModal() {
-  const { modal } = getRemoveAdsModalElements();
-  modal?.classList.remove("overlay--visible");
-}
-
-function openRemoveAdsModal({ source = "menu" } = {}) {
-  const { modal } = getRemoveAdsModalElements();
-  if (!(modal instanceof HTMLElement)) {
-    return;
-  }
-  removeAdsModalSource = source;
-  syncRemoveAdsModalUi();
-  modal.classList.add("overlay--visible");
-  void refreshRemoveAdsStorePrice();
-}
-
 function getMenuShopElements() {
   return {
     openBtn: document.getElementById("menu-shop-open-btn"),
@@ -4032,14 +3964,8 @@ function getMenuShopElements() {
     dailyStatusPill: document.getElementById("menu-shop-daily-status-pill"),
     dailyLockedRow: document.getElementById("menu-shop-daily-locked-row"),
     dailyClaimBtn: document.getElementById("menu-shop-daily-claim-btn"),
-    dailyRewardChips: Array.from(document.querySelectorAll(".menu-shop-reward-chip")),
-    packImage: document.getElementById("menu-shop-pack-image"),
-    packName: document.getElementById("menu-shop-pack-name"),
-    packMeta: document.getElementById("menu-shop-pack-meta"),
-    packBuyBtn: document.getElementById("menu-shop-pack-buy-btn"),
-    packPrevBtn: document.getElementById("menu-shop-pack-prev-btn"),
-    packNextBtn: document.getElementById("menu-shop-pack-next-btn"),
-    packStage: document.querySelector(".menu-shop-pack-stage"),
+    bonusClaimBtn: document.getElementById("menu-shop-bonus-claim-btn"),
+    dailyRewardChips: Array.from(document.querySelectorAll(".menu-shop-daily-card--compact .menu-shop-reward-chip")),
   };
 }
 
@@ -4060,103 +3986,6 @@ function formatShopCountdownLabel(remainingMs) {
   return `${hours}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
 }
 
-function normalizeMenuShopPackIndex(index) {
-  const count = SHOP_PACKS.length;
-  if (count <= 0) {
-    return 0;
-  }
-  return ((index % count) + count) % count;
-}
-
-function getMenuShopPackPriceLabel(pack) {
-  if (!pack) {
-    return "";
-  }
-  const storePrice = shopPackStorePriceLabels.get(pack.id);
-  if (typeof storePrice === "string" && storePrice.trim()) {
-    return storePrice.trim();
-  }
-  return pack.priceLabel;
-}
-
-function isShopPackPurchaseSupported(pack) {
-  if (!pack) {
-    return false;
-  }
-  const service = shopPackBillingServices.get(pack.id);
-  return Boolean(service?.isSupported?.());
-}
-
-function grantShopPackRewards(pack) {
-  if (!pack) {
-    return false;
-  }
-  const rewards = pack.rewards ?? {};
-  const twistGain = Math.max(0, Math.floor(Number(rewards.twist) || 0));
-  const hammerGain = Math.max(0, Math.floor(Number(rewards.hammer) || 0));
-  const tntGain = Math.max(0, Math.floor(Number(rewards.tnt) || 0));
-
-  if (twistGain > 0) {
-    powerHub.setCount("twist", powerHub.getCount("twist") + twistGain);
-  }
-  if (hammerGain > 0) {
-    powerHub.setCount("hammer", powerHub.getCount("hammer") + hammerGain);
-  }
-  if (tntGain > 0) {
-    powerHub.setCount("tnt", powerHub.getCount("tnt") + tntGain);
-  }
-
-  if (pack.includesRemoveAds) {
-    unlockRemoveAds("shop-pack");
-  }
-  return twistGain > 0 || hammerGain > 0 || tntGain > 0 || pack.includesRemoveAds === true;
-}
-
-function syncMenuShopPackUi() {
-  const {
-    packImage,
-    packName,
-    packMeta,
-    packBuyBtn,
-  } = getMenuShopElements();
-  if (!packImage && !packName && !packMeta && !packBuyBtn) {
-    return;
-  }
-  if (SHOP_PACKS.length <= 0) {
-    return;
-  }
-  menuShopPackIndex = normalizeMenuShopPackIndex(menuShopPackIndex);
-  const pack = SHOP_PACKS[menuShopPackIndex];
-  const localizedPack = getPackLocalizedText(pack);
-  if (packImage) {
-    packImage.src = pack.image;
-    packImage.alt = localizedPack.name || pack.name;
-  }
-  if (packName) {
-    packName.textContent = localizedPack.name || pack.name;
-  }
-  if (packMeta) {
-    packMeta.textContent = localizedPack.meta || pack.meta;
-  }
-  if (packBuyBtn) {
-    const billingSupported = isShopPackPurchaseSupported(pack);
-    const label = getMenuShopPackPriceLabel(pack);
-    packBuyBtn.textContent = menuShopPackPurchaseInFlight ? t("processing") : label;
-    packBuyBtn.dataset.packId = pack.id;
-    packBuyBtn.disabled = menuShopPackPurchaseInFlight || !billingSupported;
-    packBuyBtn.setAttribute(
-      "aria-disabled",
-      menuShopPackPurchaseInFlight || !billingSupported ? "true" : "false",
-    );
-    packBuyBtn.title = billingSupported ? "" : t("purchase_only_android");
-  }
-}
-
-function shiftMenuShopPack(step = 1) {
-  menuShopPackIndex = normalizeMenuShopPackIndex(menuShopPackIndex + step);
-  syncMenuShopPackUi();
-}
-
 function syncMenuShopUi() {
   const {
     notifyDot,
@@ -4165,6 +3994,7 @@ function syncMenuShopUi() {
     dailyStatusPill,
     dailyLockedRow,
     dailyClaimBtn,
+    bonusClaimBtn,
     dailyRewardChips,
   } = getMenuShopElements();
   const now = Date.now();
@@ -4201,13 +4031,16 @@ function syncMenuShopUi() {
     dailyClaimBtn.hidden = !ready;
     dailyClaimBtn.textContent = t("collect_reward");
   }
+  if (bonusClaimBtn) {
+    bonusClaimBtn.disabled = menuShopBonusRewardInFlight;
+    bonusClaimBtn.textContent = menuShopBonusRewardInFlight ? t("processing") : t("watch_ad_reward");
+  }
   if (dailyRewardChips?.length) {
     for (const chip of dailyRewardChips) {
       chip.classList.toggle("is-locked", !ready);
     }
   }
 
-  syncMenuShopPackUi();
 }
 
 function closeMenuShopView() {
@@ -4223,7 +4056,6 @@ function openMenuShopView() {
   ui.closeMenuBadgesView();
   ui.closeMenuLeaderboardView();
   syncMenuShopUi();
-  void refreshShopPackStorePrices();
 }
 
 function claimMenuShopDailyReward() {
@@ -4237,6 +4069,32 @@ function claimMenuShopDailyReward() {
   shopDailyLastClaimAtMs = Date.now();
   saveShopDailyLastClaimAtMs(shopDailyLastClaimAtMs);
   void rescheduleDailyRewardReminder({ requestPermission: true });
+  syncMenuShopUi();
+  return true;
+}
+
+async function claimMenuShopBonusReward() {
+  if (menuShopBonusRewardInFlight) {
+    return false;
+  }
+  menuShopBonusRewardInFlight = true;
+  syncMenuShopUi();
+  const rewardResult = await showRewardedContinueAd();
+  menuShopBonusRewardInFlight = false;
+  if (!rewardResult?.shown) {
+    ui.spawnFloatingText(t("rewarded_not_ready"), "callout");
+    syncMenuShopUi();
+    return false;
+  }
+  if (!rewardResult?.rewarded) {
+    ui.spawnFloatingText(t("rewarded_not_completed"), "callout");
+    syncMenuShopUi();
+    return false;
+  }
+  powerHub.setCount("twist", powerHub.getCount("twist") + 2);
+  powerHub.setCount("hammer", powerHub.getCount("hammer") + 1);
+  powerHub.setCount("tnt", powerHub.getCount("tnt") + 1);
+  ui.spawnFloatingText(t("bonus_reward"), "combo");
   syncMenuShopUi();
   return true;
 }
@@ -4260,204 +4118,6 @@ function startMenuShopTicker() {
   shopCountdownIntervalId = window.setInterval(() => {
     syncMenuShopUi();
   }, 1000);
-}
-
-async function refreshShopPackStorePrices() {
-  let changed = false;
-  await Promise.all(SHOP_PACKS.map(async (pack) => {
-    const service = shopPackBillingServices.get(pack.id);
-    if (!service?.isSupported?.()) {
-      return;
-    }
-    await service.warmup();
-    const details = await service.refreshProductDetails();
-    const storePrice = details?.formattedPrice || service.getDisplayPrice();
-    if (!storePrice) {
-      return;
-    }
-    const normalizedPrice = String(storePrice).trim();
-    if (!normalizedPrice || shopPackStorePriceLabels.get(pack.id) === normalizedPrice) {
-      return;
-    }
-    shopPackStorePriceLabels.set(pack.id, normalizedPrice);
-    changed = true;
-  }));
-  if (changed) {
-    syncMenuShopPackUi();
-  }
-}
-
-async function initShopPackBillingFlow() {
-  await refreshShopPackStorePrices();
-  for (const pack of SHOP_PACKS) {
-    if (pack.consumeAfterPurchase === true) {
-      continue;
-    }
-    if (pack.includesRemoveAds !== true) {
-      continue;
-    }
-    const service = shopPackBillingServices.get(pack.id);
-    if (!service?.isSupported?.()) {
-      continue;
-    }
-    const restore = await service.restore();
-    if (restore?.owned && !removeAdsUnlocked) {
-      unlockRemoveAds("restore");
-    }
-  }
-}
-
-function handleRemoveAdsRequest({ source = "menu" } = {}) {
-  openRemoveAdsModal({ source });
-}
-
-function unlockRemoveAds(source = "menu") {
-  if (!removeAdsUnlocked) {
-    removeAdsUnlocked = true;
-    saveRemoveAdsUnlocked(true);
-  }
-  syncRemoveAdsButtons();
-  syncGameplayBannerVisibility(state.getSnapshot());
-  void adMobService.removeBanner();
-  if (source === "gameover") {
-    ui.setGameOverActionNote(t("ads_removed_note"));
-  }
-}
-
-function completeRemoveAdsPurchase() {
-  unlockRemoveAds(removeAdsModalSource);
-  closeRemoveAdsModal();
-}
-
-async function processRemoveAdsPurchase() {
-  if (removeAdsUnlocked || removeAdsModalPurchaseInFlight) {
-    return;
-  }
-  if (!playBillingService.isSupported()) {
-    setRemoveAdsModalMessage(t("purchase_only_android"));
-    return;
-  }
-
-  removeAdsModalPurchaseInFlight = true;
-  syncRemoveAdsModalUi();
-  setRemoveAdsModalMessage("Opening Google Play purchase screen...");
-
-  const purchaseResult = await playBillingService.purchase();
-  removeAdsModalPurchaseInFlight = false;
-
-  if (purchaseResult?.ok && purchaseResult?.status === "purchased") {
-    completeRemoveAdsPurchase();
-    return;
-  }
-
-  syncRemoveAdsModalUi();
-  const status = String(purchaseResult?.status || "").toLowerCase();
-  if (status === "cancelled") {
-    setRemoveAdsModalMessage("Purchase cancelled. You can try again anytime.");
-    return;
-  }
-  if (status === "pending") {
-    setRemoveAdsModalMessage("Purchase is pending approval. Ads will be removed when payment is confirmed.");
-    return;
-  }
-  const fallbackMessage = purchaseResult?.message || "Purchase could not be completed. Please try again.";
-  setRemoveAdsModalMessage(fallbackMessage);
-}
-
-function initRemoveAdsModalControls() {
-  const { backdrop, purchaseBtn, cancelBtn } = getRemoveAdsModalElements();
-  backdrop?.addEventListener("click", () => {
-    if (removeAdsModalPurchaseInFlight) {
-      return;
-    }
-    closeRemoveAdsModal();
-  });
-  cancelBtn?.addEventListener("click", () => {
-    if (removeAdsModalPurchaseInFlight) {
-      return;
-    }
-    closeRemoveAdsModal();
-  });
-  purchaseBtn?.addEventListener("click", async () => {
-    await processRemoveAdsPurchase();
-  });
-}
-
-async function initRemoveAdsBillingFlow() {
-  if (!playBillingService.isSupported()) {
-    removeAdsPriceLabel = REMOVE_ADS_PRICE_USD;
-    syncRemoveAdsModalUi();
-    return;
-  }
-
-  await playBillingService.warmup();
-  await refreshRemoveAdsStorePrice();
-
-  const restore = await playBillingService.restore();
-  if (restore?.owned && !removeAdsUnlocked) {
-    unlockRemoveAds("restore");
-  }
-}
-
-async function purchaseMenuShopPack(packIdRaw) {
-  const packId = String(packIdRaw || "").trim();
-  if (!packId) {
-    return;
-  }
-  if (menuShopPackPurchaseInFlight) {
-    return;
-  }
-  const pack = SHOP_PACKS_BY_ID.get(packId);
-  if (!pack) {
-    return;
-  }
-  const service = shopPackBillingServices.get(pack.id);
-  if (!service?.isSupported?.()) {
-    ui.spawnFloatingText("Purchases require Google Play Android build.", "callout");
-    return;
-  }
-
-  menuShopPackPurchaseInFlight = true;
-  syncMenuShopPackUi();
-  const purchaseResult = await service.purchase();
-  menuShopPackPurchaseInFlight = false;
-  syncMenuShopPackUi();
-
-  if (purchaseResult?.ok && purchaseResult?.status === "purchased") {
-    const purchaseToken = String(purchaseResult?.details?.purchaseToken || "").trim();
-    if (!purchaseToken) {
-      ui.spawnFloatingText("Purchase verification failed. Please try again.", "callout");
-      return;
-    }
-    if (pack.consumeAfterPurchase === true && purchaseResult?.details?.consumed !== true) {
-      ui.spawnFloatingText("Purchase not finalized yet. Try again in a moment.", "callout");
-      return;
-    }
-    if (hasGrantedShopPackPurchaseToken(shopPackGrantedTokens, pack.id, purchaseToken)) {
-      ui.spawnFloatingText("Purchase already applied.", "callout");
-      return;
-    }
-    grantShopPackRewards(pack);
-    shopPackGrantedTokens = rememberGrantedShopPackPurchaseToken(
-      shopPackGrantedTokens,
-      pack.id,
-      purchaseToken,
-    );
-    saveShopPackGrantedTokens(shopPackGrantedTokens);
-    ui.spawnFloatingText(`${pack.name} unlocked`, "combo");
-    return;
-  }
-
-  const status = String(purchaseResult?.status || "").toLowerCase();
-  if (status === "cancelled") {
-    ui.spawnFloatingText("Purchase cancelled", "callout");
-    return;
-  }
-  if (status === "pending") {
-    ui.spawnFloatingText("Purchase pending approval", "callout");
-    return;
-  }
-  ui.spawnFloatingText("Purchase failed. Try again.", "callout");
 }
 
 function createMascotReactionOverlay() {
@@ -4812,8 +4472,7 @@ async function openSettingsPanel(source = "game") {
 }
 
 syncMenuSettingsButton();
-syncRemoveAdsButtons();
-initRemoveAdsModalControls();
+syncMonetizationUiState();
 syncClassicPhotoBoardConfig();
 syncClassicPhotoBoardSettingsUi();
 startMenuShopTicker();
@@ -4832,21 +4491,19 @@ function scheduleStartupTask(taskName, task, delayMs = 0) {
 }
 
 function initStartupServicesSafely() {
-  // Keep iOS first-launch stable: defer native init and avoid permission prompt at launch.
+  // iOS App Store review expects ATT before ad SDK initialization on a fresh install.
   const isIos = ADMOB_PLATFORM === "ios";
-  const isAndroid = ADMOB_PLATFORM === "android";
-
-  if (isAndroid) {
-    scheduleStartupTask("remove-ads-billing", () => initRemoveAdsBillingFlow(), 500);
-    scheduleStartupTask("shop-pack-billing", () => initShopPackBillingFlow(), 900);
-  }
 
   scheduleStartupTask("daily-reward-reminder", () => {
     rescheduleDailyRewardReminder({ requestPermission: false });
   }, isIos ? 3000 : 1200);
 
   scheduleStartupTask("admob-initialize", async () => {
+    if (isIos) {
+      await appTrackingTransparencyService.requestPermission();
+    }
     const initialized = await adMobService.initialize();
+    updateAdPrivacyDebugPanel();
     if (!initialized) {
       return;
     }
@@ -4856,6 +4513,11 @@ function initStartupServicesSafely() {
 }
 
 initStartupServicesSafely();
+if (AD_PRIVACY_DEBUG_ENABLED) {
+  window.setTimeout(() => {
+    void runAdPrivacyDebugActions();
+  }, 250);
+}
 window.setTimeout(() => {
   void checkForSoftUpdatePrompt();
 }, 1200);
@@ -5002,11 +4664,6 @@ ui.bindControls({
       currentLevel,
       completed: progress.completed ?? {},
     });
-  },
-  onMenuRemoveAds: async () => {
-    await primeAudioForInteraction();
-    audio.playUiTap({ id: "menu-remove-ads" });
-    handleRemoveAdsRequest({ source: "menu" });
   },
   onOpenMenuLeaderboard: async () => {
     await primeAudioForInteraction();
@@ -5190,11 +4847,6 @@ ui.bindControls({
     syncSettingsPanelState();
     ui.render(state.getSnapshot());
   },
-  onSettingsRemoveAds: async () => {
-    await primeAudioForInteraction();
-    audio.playUiTap({ id: "settings-remove-ads" });
-    handleRemoveAdsRequest({ source: "settings" });
-  },
   onSettingsBadges: async () => {
     await primeAudioForInteraction();
     audio.playUiTap({ id: "settings-badges" });
@@ -5312,11 +4964,6 @@ ui.bindControls({
     }
     syncGameOverContinueUi(state.getSnapshot());
   },
-  onGameOverRemoveAds: async () => {
-    await primeAudioForInteraction();
-    audio.playUiTap({ id: "gameover-remove-ads" });
-    handleRemoveAdsRequest({ source: "gameover" });
-  },
   onAdventureNext: async () => {
     await primeAudioForInteraction();
     audio.playUiTap({ id: "adventure-next" });
@@ -5389,10 +5036,7 @@ ui.bindControls({
     openBtn,
     closeBtn,
     dailyClaimBtn,
-    packPrevBtn,
-    packNextBtn,
-    packStage,
-    packBuyBtn,
+    bonusClaimBtn,
   } = getMenuShopElements();
 
   openBtn?.addEventListener("click", async () => {
@@ -5421,75 +5065,12 @@ ui.bindControls({
     }
   });
 
-  packPrevBtn?.addEventListener("click", async () => {
+  bonusClaimBtn?.addEventListener("click", async () => {
     await primeAudioForInteraction();
-    audio.playUiTap({ id: "shop-pack-prev" });
-    shiftMenuShopPack(-1);
+    audio.playUiTap({ id: "claim-bonus-reward" });
+    await claimMenuShopBonusReward();
   });
 
-  packNextBtn?.addEventListener("click", async () => {
-    await primeAudioForInteraction();
-    audio.playUiTap({ id: "shop-pack-next" });
-    shiftMenuShopPack(1);
-  });
-
-  packBuyBtn?.addEventListener("click", async () => {
-    await primeAudioForInteraction();
-    audio.playUiTap({ id: "shop-pack-select" });
-    await purchaseMenuShopPack(packBuyBtn.dataset.packId);
-  });
-
-  if (packStage) {
-    let swipeStartX = 0;
-    let swipeTracking = false;
-    const beginSwipe = (clientX) => {
-      swipeStartX = clientX;
-      swipeTracking = true;
-    };
-    const endSwipe = (clientX) => {
-      if (!swipeTracking) {
-        return;
-      }
-      swipeTracking = false;
-      const delta = clientX - swipeStartX;
-      if (Math.abs(delta) < 32) {
-        return;
-      }
-      if (delta < 0) {
-        shiftMenuShopPack(1);
-      } else {
-        shiftMenuShopPack(-1);
-      }
-      audio.playUiTap({ id: "shop-pack-swipe" });
-    };
-    packStage.addEventListener("touchstart", (event) => {
-      if (!event.touches || event.touches.length <= 0) {
-        return;
-      }
-      beginSwipe(event.touches[0].clientX);
-    }, { passive: true });
-    packStage.addEventListener("touchend", (event) => {
-      if (!event.changedTouches || event.changedTouches.length <= 0) {
-        return;
-      }
-      endSwipe(event.changedTouches[0].clientX);
-    });
-    packStage.addEventListener("pointerdown", (event) => {
-      if (event.pointerType === "touch") {
-        return;
-      }
-      beginSwipe(event.clientX);
-    });
-    packStage.addEventListener("pointerup", (event) => {
-      if (event.pointerType === "touch") {
-        return;
-      }
-      endSwipe(event.clientX);
-    });
-    packStage.addEventListener("pointercancel", () => {
-      swipeTracking = false;
-    });
-  }
 }
 
 const initialLeaderboardSnapshot = state.getSnapshot();
@@ -5834,12 +5415,11 @@ function triggerAdFlowTestGameOver(interstitialResult = "no-fill") {
   state.triggerGameOver({ reason: "ad-flow-test" });
 }
 
-function setAdFlowTestRemoveAds(enabled) {
-  removeAdsUnlocked = Boolean(enabled);
-  saveRemoveAdsUnlocked(removeAdsUnlocked);
-  syncRemoveAdsButtons();
+function setAdFlowTestAdDisplayPaused(enabled) {
+  adDisplayPausedForTest = Boolean(enabled);
+  syncMonetizationUiState();
   syncGameplayBannerVisibility(state.getSnapshot());
-  if (removeAdsUnlocked) {
+  if (adDisplayPausedForTest) {
     void adMobService.removeBanner();
   }
   updateAdFlowTestPanel();
@@ -5875,7 +5455,7 @@ function mountAdFlowTestPanel() {
     <p class="combo-test-panel__note">Web test: no real ad requests are made.</p>
     <div class="combo-test-panel__meters">
       <span>State <strong id="ad-test-state">menu</strong></span>
-      <span>Remove Ads <strong id="ad-test-remove-ads">off</strong></span>
+      <span>Ads paused <strong id="ad-test-ads-paused">off</strong></span>
     </div>
     <div class="combo-test-panel__grid">
       <button type="button" data-ad-test="game-over">Game Over</button>
@@ -5885,8 +5465,8 @@ function mountAdFlowTestPanel() {
       <button type="button" data-ad-test="rewarded-no-fill">Rewarded no-fill</button>
       <button type="button" data-ad-test="try-again">Try Again</button>
       <button type="button" data-ad-test="home">Home</button>
-      <button type="button" data-ad-test="remove-ads-on">Remove Ads active</button>
-      <button type="button" data-ad-test="remove-ads-off">Remove Ads passive</button>
+      <button type="button" data-ad-test="ads-paused-on">Ads paused</button>
+      <button type="button" data-ad-test="ads-paused-off">Ads active</button>
     </div>
   `;
   panel.addEventListener("click", async (event) => {
@@ -5918,10 +5498,10 @@ function mountAdFlowTestPanel() {
       document.getElementById("restart-gameover-btn")?.click();
     } else if (action === "home") {
       document.getElementById("gameover-home-btn")?.click();
-    } else if (action === "remove-ads-on") {
-      setAdFlowTestRemoveAds(true);
-    } else if (action === "remove-ads-off") {
-      setAdFlowTestRemoveAds(false);
+    } else if (action === "ads-paused-on") {
+      setAdFlowTestAdDisplayPaused(true);
+    } else if (action === "ads-paused-off") {
+      setAdFlowTestAdDisplayPaused(false);
     }
     updateAdFlowTestPanel();
   });
@@ -5934,12 +5514,12 @@ function updateAdFlowTestPanel(snapshot = state.getSnapshot?.()) {
     return;
   }
   const stateLabel = document.getElementById("ad-test-state");
-  const removeAdsLabel = document.getElementById("ad-test-remove-ads");
+  const adsPausedLabel = document.getElementById("ad-test-ads-paused");
   if (stateLabel) {
     stateLabel.textContent = gameOverInterstitialInFlight ? "ad open" : String(snapshot.status || "unknown");
   }
-  if (removeAdsLabel) {
-    removeAdsLabel.textContent = removeAdsUnlocked ? "active" : "passive";
+  if (adsPausedLabel) {
+    adsPausedLabel.textContent = adDisplayPausedForTest ? "yes" : "no";
   }
 }
 
@@ -5947,6 +5527,7 @@ let journeyTestSelectedLevel = Math.max(
   1,
   Math.min(ADVENTURE_MAX_LEVEL, JOURNEY_TEST_INITIAL_LEVEL),
 );
+let journeyTestLastError = "";
 
 function clampJourneyTestLevel(rawLevel) {
   return Math.max(1, Math.min(ADVENTURE_MAX_LEVEL, Math.floor(Number(rawLevel) || 1)));
@@ -5962,13 +5543,17 @@ function resetJourneyTestFeedback() {
 
 function startJourneyTestLevel(rawLevel) {
   journeyTestSelectedLevel = clampJourneyTestLevel(rawLevel);
-  void primeAudioForInteraction();
   closeMenuShopView();
   ui.closeSettingsPanel();
   ui.closeJourneyPanel();
-  resetJourneyTestFeedback();
-  audio.playUiTap({ id: "journey-test-start" });
-  state.startGame({ mode: "adventure", level: journeyTestSelectedLevel });
+  journeyTestLastError = "";
+  try {
+    state.startGame({ mode: "adventure", level: journeyTestSelectedLevel });
+    resetJourneyTestFeedback();
+  } catch (error) {
+    journeyTestLastError = String(error?.message || error || "Unknown error");
+    console.error("[journey-test] level start failed", error);
+  }
   updateJourneyTestPanel();
 }
 
@@ -6009,7 +5594,9 @@ function mountJourneyTestPanel() {
     return;
   }
 
-  const levelButtons = Array.from({ length: 10 }, (_, index) => 21 + index)
+  const journeyTestChapterStart = Math.floor((journeyTestSelectedLevel - 1) / 10) * 10 + 1;
+  const levelButtons = Array.from({ length: 10 }, (_, index) => journeyTestChapterStart + index)
+    .filter((level) => level <= ADVENTURE_MAX_LEVEL)
     .map((level) => `<button type="button" data-journey-level="${level}">${level}</button>`)
     .join("");
   const panel = document.createElement("aside");
@@ -6035,7 +5622,7 @@ function mountJourneyTestPanel() {
       <button type="button" data-journey-action="next">Next</button>
       <button type="button" data-journey-action="map">Map</button>
     </div>
-    <div class="journey-test-level-grid" aria-label="Journey levels 21 to 30">
+    <div class="journey-test-level-grid" aria-label="Journey levels ${journeyTestChapterStart} to ${Math.min(ADVENTURE_MAX_LEVEL, journeyTestChapterStart + 9)}">
       ${levelButtons}
     </div>
   `;
@@ -6095,7 +5682,7 @@ function updateJourneyTestPanel(snapshot = state.getSnapshot?.()) {
     selected.textContent = String(journeyTestSelectedLevel);
   }
   if (running) {
-    running.textContent = runningLevel ? String(runningLevel) : "-";
+    running.textContent = journeyTestLastError || (runningLevel ? String(runningLevel) : "-");
   }
   if (input instanceof HTMLInputElement && document.activeElement !== input) {
     input.value = String(journeyTestSelectedLevel);
@@ -6412,10 +5999,7 @@ const performInitialRender = () => {
     layoutGuardStatus = snapshot.status;
     scheduleLayoutGuards();
     mascotReaction = createMascotReactionOverlay();
-    const shouldStartRewardGuide = shouldStartOnboardingShopRewardGuide();
-    if (shouldStartRewardGuide && state.getSnapshot().status === "menu") {
-      window.setTimeout(() => startOnboardingShopRewardGuide(), 220);
-    }
+    shouldStartOnboardingShopRewardGuide();
   } catch (error) {
     console.warn("[startup] initial render failed.", error);
   } finally {

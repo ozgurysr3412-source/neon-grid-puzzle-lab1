@@ -22,7 +22,6 @@ const CORE_ASSETS = [
   "/src/platform/adMobService.js",
   "/src/platform/inAppReviewService.js",
   "/src/platform/localNotificationService.js",
-  "/src/platform/playBillingService.js",
   "/assets/blocks/block-blue.png",
   "/assets/blocks/block-green.png",
   "/assets/blocks/block-orange.png",

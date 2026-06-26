@@ -1,0 +1,11 @@
+node_modules/
+dist/
+android/
+dev-server*.cjs
+marketing_pack/
+release_artifacts/
+ios/App/Pods/
+ios/App/Podfile.lock
+assets/adventure/cores/core-crown-seal-clean-1024.png
+*.log
+.DS_Store

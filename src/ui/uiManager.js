@@ -217,6 +217,9 @@ const ADVENTURE_VISUALS = {
   red: {
     icon: "./assets/adventure/locked/objective-red.webp",
   },
+  crown: {
+    icon: "./assets/adventure/cores/core-crown-seal-clean-512.webp",
+  },
 };
 const ADVENTURE_COLLECT_SHELL_ICON = "./assets/adventure/processed/objective-base.webp";
 const ADVENTURE_COLLECT_CORE = {
@@ -227,6 +230,14 @@ const ADVENTURE_COLLECT_CORE = {
 const ADVENTURE_SCORE_HUD_ICONS = {
   star: "./assets/adventure/cores/core-yellow-star-premium-512.webp",
   ruby: "./assets/adventure/cores/core-red-ruby-clean-512.webp",
+  diamond: "./assets/adventure/cores/core-blue-diamond-clean-512.webp",
+  crown: "./assets/adventure/cores/core-crown-seal-clean-512.webp",
+};
+const ADVENTURE_OBJECTIVE_CORE_BY_TYPE = {
+  blue: ADVENTURE_SCORE_HUD_ICONS.diamond,
+  yellow: ADVENTURE_SCORE_HUD_ICONS.star,
+  red: ADVENTURE_SCORE_HUD_ICONS.ruby,
+  crown: ADVENTURE_SCORE_HUD_ICONS.crown,
 };
 const ADVENTURE_COLLECT_VFX = {
   blue: {
@@ -310,6 +321,7 @@ const ADVENTURE_OBJECTIVE_TYPE_BY_TONE = {
   101: "blue",
   102: "yellow",
   103: "red",
+  104: "crown",
 };
 const BLOCK_SPRITES_BY_TONE = {
   1: "./assets/blocks/block-pink.webp",
@@ -788,7 +800,6 @@ export class UIManager {
       weeklyTopList: document.getElementById("weekly-top-list"),
       startClassicBtn: document.getElementById("start-classic-btn"),
       startDailyBtn: document.getElementById("start-daily-btn"),
-      menuRemoveAdsBtn: document.getElementById("menu-remove-ads-btn"),
       menuLeaderboardOpenBtn: document.getElementById("menu-leaderboard-open-btn"),
       menuLeaderboardScreen: document.getElementById("menu-leaderboard-screen"),
       menuLeaderboardCloseBtn: document.getElementById("menu-leaderboard-close-btn"),
@@ -834,7 +845,6 @@ export class UIManager {
       settingsPhotoBoardToggleBtn: document.getElementById("settings-photo-board-toggle-btn"),
       settingsPhotoBoardPickBtn: document.getElementById("settings-photo-board-pick-btn"),
       settingsPhotoBoardClearBtn: document.getElementById("settings-photo-board-clear-btn"),
-      settingsRemoveAdsBtn: document.getElementById("settings-remove-ads-btn"),
       settingsBadgesBtn: document.getElementById("settings-badges-btn"),
       settingsLeaderboardBtn: document.getElementById("settings-leaderboard-btn"),
       settingsResumeBtn: document.getElementById("settings-resume-btn"),
@@ -849,7 +859,6 @@ export class UIManager {
       restartGameOverBtn: document.getElementById("restart-gameover-btn"),
       gameOverHomeBtn: document.getElementById("gameover-home-btn"),
       gameOverContinueBtn: document.getElementById("gameover-continue-btn"),
-      gameOverRemoveAdsBtn: document.getElementById("gameover-remove-ads-btn"),
       adventureNextBtn: document.getElementById("adventure-next-btn"),
       adventureReplayBtn: document.getElementById("adventure-replay-btn"),
       hintBtn: document.getElementById("hint-btn"),
@@ -872,7 +881,6 @@ export class UIManager {
     onStartClassic,
     onStartAdventure,
     onOpenJourney,
-    onMenuRemoveAds,
     onOpenMenuLeaderboard,
     onCloseMenuLeaderboard,
     onSaveMenuLeaderboardProfile,
@@ -890,7 +898,6 @@ export class UIManager {
     onSettingsTogglePhotoBoard,
     onSettingsPickPhotoBoard,
     onSettingsClearPhotoBoard,
-    onSettingsRemoveAds,
     onSettingsBadges,
     onSettingsLeaderboard,
     onSettingsResume,
@@ -899,7 +906,6 @@ export class UIManager {
     onRestart,
     onGameOverHome,
     onGameOverContinue,
-    onGameOverRemoveAds,
     onAdventureNext,
     onAdventureReplay,
     onMilestoneUnlockContinue,
@@ -915,7 +921,6 @@ export class UIManager {
       }
       onStartAdventure?.();
     });
-    this.elements.menuRemoveAdsBtn?.addEventListener("click", onMenuRemoveAds);
     this.elements.menuLeaderboardOpenBtn?.addEventListener("click", () => {
       onOpenMenuLeaderboard?.();
     });
@@ -997,7 +1002,6 @@ export class UIManager {
     this.elements.settingsPhotoBoardToggleBtn?.addEventListener("click", onSettingsTogglePhotoBoard);
     this.elements.settingsPhotoBoardPickBtn?.addEventListener("click", onSettingsPickPhotoBoard);
     this.elements.settingsPhotoBoardClearBtn?.addEventListener("click", onSettingsClearPhotoBoard);
-    this.elements.settingsRemoveAdsBtn?.addEventListener("click", onSettingsRemoveAds);
     this.elements.settingsBadgesBtn?.addEventListener("click", onSettingsBadges);
     this.elements.settingsLeaderboardBtn?.addEventListener("click", onSettingsLeaderboard);
     this.elements.settingsResumeBtn?.addEventListener("click", onSettingsResume);
@@ -1012,7 +1016,6 @@ export class UIManager {
     this.elements.restartGameOverBtn?.addEventListener("click", onRestart);
     this.elements.gameOverHomeBtn?.addEventListener("click", onGameOverHome);
     this.elements.gameOverContinueBtn?.addEventListener("click", onGameOverContinue);
-    this.elements.gameOverRemoveAdsBtn?.addEventListener("click", onGameOverRemoveAds);
     this.elements.adventureNextBtn?.addEventListener("click", onAdventureNext);
     this.elements.adventureReplayBtn?.addEventListener("click", onAdventureReplay);
     this.elements.milestoneUnlockContinueBtn?.addEventListener("click", onMilestoneUnlockContinue);
@@ -2443,6 +2446,10 @@ export class UIManager {
       .forEach((node) => node.remove());
   }
 
+  shouldUseSingleLayerObjectiveIcons() {
+    return Boolean(this.fxProfile?.isIOS);
+  }
+
   beginDragSession(slotIndex = null) {
     this.dragSessionActive = true;
     this.dragSessionSlot = Number.isInteger(slotIndex) ? slotIndex : null;
@@ -2534,9 +2541,10 @@ export class UIManager {
         const isFilled = value !== 0;
         const isObjective = Boolean(objectiveType);
         const tileIndex = (row * this.boardSize) + col;
+        const useSingleLayerObjective = isObjective && this.shouldUseSingleLayerObjectiveIcons();
         let renderKey = "empty";
         if (isObjective) {
-          renderKey = `obj:${objectiveType}`;
+          renderKey = `obj:${objectiveType}:${useSingleLayerObjective ? "core" : "shell"}`;
         } else if (isFilled && useClassicPhotoBoard) {
           const tileUrl = this.classicPhotoTiles[tileIndex];
           if (typeof tileUrl === "string" && tileUrl.length > 0) {
@@ -2553,15 +2561,20 @@ export class UIManager {
         }
         this.boardRenderCache[tileIndex] = renderKey;
 
-        cell.classList.remove("cell--objective", "cell--photo-filled");
+        cell.classList.remove("cell--objective", "cell--objective-core", "cell--objective-crown", "cell--photo-filled");
         cell.style.removeProperty("background-image");
         cell.classList.toggle("cell--filled", false);
         delete cell.dataset.tone;
 
         if (isObjective) {
           cell.classList.add("cell--objective");
+          cell.classList.toggle("cell--objective-crown", objectiveType === "crown");
+          cell.classList.toggle("cell--objective-core", useSingleLayerObjective);
           cell.classList.add("cell--filled");
-          cell.style.backgroundImage = `url("${ADVENTURE_VISUALS[objectiveType].icon}")`;
+          const objectiveIcon = useSingleLayerObjective
+            ? ADVENTURE_OBJECTIVE_CORE_BY_TYPE[objectiveType]
+            : ADVENTURE_VISUALS[objectiveType].icon;
+          cell.style.backgroundImage = `url("${objectiveIcon}")`;
           continue;
         }
 
@@ -6470,8 +6483,8 @@ export class UIManager {
     const timerSec = Math.max(0, Math.ceil(timerMs / 1000));
     const progress = Math.max(0, Math.min(1, safeScore / targetScore));
     const progressPercent = Math.round(progress * 100);
-    const iconRemaining = objective.iconRemaining ?? { star: 0, ruby: 0 };
-    const iconTargets = objective.iconTargets ?? { star: 0, ruby: 0 };
+    const iconRemaining = objective.iconRemaining ?? { star: 0, ruby: 0, diamond: 0, crown: 0 };
+    const iconTargets = objective.iconTargets ?? { star: 0, ruby: 0, diamond: 0, crown: 0 };
 
     root.innerHTML = "";
 
@@ -6495,7 +6508,7 @@ export class UIManager {
 
     const iconWrap = document.createElement("div");
     iconWrap.className = "adventure-score-icons";
-    ["star", "ruby"].forEach((type) => {
+    ["star", "ruby", "diamond", "crown"].forEach((type) => {
       const target = Number(iconTargets[type] ?? 0);
       if (target <= 0) {
         return;
@@ -6537,7 +6550,10 @@ export class UIManager {
         return;
       }
       const iconType = marker?.iconType;
-      if (iconType !== "star" && iconType !== "ruby") {
+      if (!["star", "ruby", "diamond", "crown"].includes(iconType)) {
+        return;
+      }
+      if (iconType === "crown" || this.shouldUseSingleLayerObjectiveIcons()) {
         return;
       }
       const markerEl = document.createElement("span");
@@ -6576,6 +6592,12 @@ export class UIManager {
     if (marker?.iconType === "ruby") {
       return "red";
     }
+    if (marker?.iconType === "diamond") {
+      return "blue";
+    }
+    if (marker?.iconType === "crown") {
+      return "yellow";
+    }
     return marker?.type ?? "yellow";
   }
 
@@ -6590,7 +6612,7 @@ export class UIManager {
     if (!hud || !marker) {
       return { targetChip: null, targetIcon: null };
     }
-    if (marker.iconType === "star" || marker.iconType === "ruby") {
+    if (["star", "ruby", "diamond", "crown"].includes(marker.iconType)) {
       const targetChip = hud.querySelector(`.adventure-score-icon-chip[data-icon="${marker.iconType}"]`);
       const targetIcon = targetChip?.querySelector(".adventure-score-icon");
       return {
@@ -6616,7 +6638,7 @@ export class UIManager {
       this.playAdventureCollectFeedbackPhase1(payload);
       return;
     }
-    this.playAdventureCollectFeedbackPremium(payload);
+    this.playAdventureCollectFeedbackCrownSeal(payload);
   }
 
   playAdventureCollectFeedbackRaw(payload) {
@@ -6684,7 +6706,7 @@ export class UIManager {
     });
   }
 
-  playAdventureCollectFeedbackPremium(payload) {
+  playAdventureCollectFeedbackCrownSeal(payload) {
     const layer = this.elements.particleLayer;
     const hud = this.elements.adventureHud;
     if (!layer || !hud || !Array.isArray(payload?.collectedMarkers)) {
@@ -6760,10 +6782,13 @@ export class UIManager {
         restoreCellVisual?.();
       }, delay + 90);
 
-      const fly = this.createAdventureEssenceCore(markerTone, sourceX, sourceY, { popProfile });
+      const fly = this.createAdventureEssenceCore(markerTone, sourceX, sourceY, {
+        popProfile,
+        iconUrl: this.resolveAdventureCollectIconUrl(marker),
+      });
       layer.appendChild(fly);
       this.adventureFlyActive += 1;
-      // Premium collect: keep source area clean; no burst/ring under icon.
+      // Crown Seal collect: keep source area clean; no burst/ring under icon.
 
       this.animateAdventureCollectGlide({
         fly,
@@ -6826,7 +6851,10 @@ export class UIManager {
       const delay = index * 74;
       const restoreCellVisual = this.applyObjectiveCellShellState(marker.row, marker.col, { restoreMode: "empty" });
 
-      const core = this.createAdventureEssenceCore(markerTone, sourceX, sourceY, { popProfile });
+      const core = this.createAdventureEssenceCore(markerTone, sourceX, sourceY, {
+        popProfile,
+        iconUrl: this.resolveAdventureCollectIconUrl(marker),
+      });
       core.classList.add("adventure-essence-core--phase1");
       layer.appendChild(core);
 
@@ -7113,7 +7141,8 @@ export class UIManager {
     fly.dataset.popDirection = popProfile.direction === "down" ? "down" : "up";
     fly.style.left = `${sourceX}px`;
     fly.style.top = `${sourceY}px`;
-    fly.style.backgroundImage = `url("${ADVENTURE_COLLECT_CORE[type] ?? ADVENTURE_COLLECT_CORE.blue}")`;
+    const iconUrl = options.iconUrl ?? ADVENTURE_COLLECT_CORE[type] ?? ADVENTURE_COLLECT_CORE.blue;
+    fly.style.backgroundImage = `url("${iconUrl}")`;
     fly.style.setProperty("--collect-tone", type);
     fly.style.setProperty("--core-glow", "rgba(255, 255, 255, 0.64)");
     fly.style.setProperty("--essence-pop-peak-y", `${Number(popProfile.peakY ?? -34)}px`);

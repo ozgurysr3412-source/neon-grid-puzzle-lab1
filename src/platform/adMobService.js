@@ -6,6 +6,14 @@ export function createAdMobService(options = {}) {
   const interstitialAdId = String(options.interstitialAdId || "");
   const rewardedAdId = String(options.rewardedAdId || "");
   const testing = Boolean(options.testing);
+  const consentDebugGeography = Number.isFinite(Number(options.consentDebugGeography))
+    ? Number(options.consentDebugGeography)
+    : null;
+  const consentTestDeviceIdentifiers = Array.isArray(options.consentTestDeviceIdentifiers)
+    ? options.consentTestDeviceIdentifiers.map((id) => String(id || "").trim()).filter(Boolean)
+    : [];
+  const resetConsentOnInitialize = Boolean(options.resetConsentOnInitialize);
+  const openAdInspectorOnInitialize = Boolean(options.openAdInspectorOnInitialize);
   const interstitialCooldownMs = Math.max(
     0,
     Number(options.interstitialCooldownMs ?? DEFAULT_INTERSTITIAL_COOLDOWN_MS) || 0,
@@ -69,6 +77,12 @@ export function createAdMobService(options = {}) {
   let rewardedShowPromise = null;
   let lastInterstitialShownAtMs = 0;
   let admobPlugin = null;
+  let privacyBridgePlugin = null;
+  let consentReady = false;
+  let latestConsentInfo = null;
+  let lastUnityPrivacyMetadata = null;
+  let lastAdInitStatus = "not-started";
+  let lastConsentError = "";
 
   const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
@@ -101,6 +115,147 @@ export function createAdMobService(options = {}) {
       return admobPlugin;
     } catch {
       return null;
+    }
+  }
+
+  function ensurePrivacyBridge() {
+    if (privacyBridgePlugin) {
+      return privacyBridgePlugin;
+    }
+    try {
+      const plugin = window?.Capacitor?.Plugins?.AdPrivacyBridge;
+      if (!plugin || typeof plugin !== "object") {
+        return null;
+      }
+      privacyBridgePlugin = plugin;
+      return privacyBridgePlugin;
+    } catch {
+      return null;
+    }
+  }
+
+  function isConsentGrantedForUnity(info) {
+    const status = String(info?.status || "").toUpperCase();
+    return Boolean(info?.canRequestAds) && (status === "OBTAINED" || status === "NOT_REQUIRED");
+  }
+
+  async function syncUnityPrivacyMetadata(info) {
+    if (!["android", "ios"].includes(platform)) {
+      lastUnityPrivacyMetadata = {
+        gdprConsent: null,
+        privacyConsent: null,
+        bridgeAvailable: false,
+        set: false,
+        skipped: true,
+        error: "",
+      };
+      return true;
+    }
+    const bridge = ensurePrivacyBridge();
+    if (!bridge || typeof bridge.setUnityPrivacyConsent !== "function") {
+      lastUnityPrivacyMetadata = {
+        gdprConsent: null,
+        privacyConsent: null,
+        bridgeAvailable: false,
+        set: false,
+        error: "AdPrivacyBridge unavailable",
+      };
+      return false;
+    }
+    const consentGranted = isConsentGrantedForUnity(info);
+    try {
+      const result = await bridge.setUnityPrivacyConsent({
+        gdprConsent: consentGranted,
+        privacyConsent: consentGranted,
+        canRequestAds: Boolean(info?.canRequestAds),
+        status: String(info?.status || "UNKNOWN"),
+        privacyOptionsRequirementStatus: String(info?.privacyOptionsRequirementStatus || "UNKNOWN"),
+      });
+      lastUnityPrivacyMetadata = {
+        ...(result || {}),
+        gdprConsent: consentGranted,
+        privacyConsent: consentGranted,
+        bridgeAvailable: true,
+        set: true,
+      };
+      return true;
+    } catch (error) {
+      lastUnityPrivacyMetadata = {
+        gdprConsent: consentGranted,
+        privacyConsent: consentGranted,
+        bridgeAvailable: true,
+        set: false,
+        error: String(error?.message || error || "Unable to set Unity privacy metadata"),
+      };
+      return false;
+    }
+  }
+
+  function buildConsentOptions(overrides = {}) {
+    const nextDebugGeography = Number.isFinite(Number(overrides.debugGeography))
+      ? Number(overrides.debugGeography)
+      : consentDebugGeography;
+    const nextTestDeviceIdentifiers = Array.isArray(overrides.testDeviceIdentifiers)
+      ? overrides.testDeviceIdentifiers.map((id) => String(id || "").trim()).filter(Boolean)
+      : consentTestDeviceIdentifiers;
+    const consentOptions = {
+      tagForUnderAgeOfConsent: false,
+    };
+    if (nextDebugGeography !== null) {
+      consentOptions.debugGeography = nextDebugGeography;
+    }
+    if (nextTestDeviceIdentifiers.length > 0) {
+      consentOptions.testDeviceIdentifiers = nextTestDeviceIdentifiers;
+    }
+    return consentOptions;
+  }
+
+  async function requestConsentFlow(plugin, overrides = {}) {
+    if (overrides.reset === true && typeof plugin.resetConsentInfo === "function") {
+      await plugin.resetConsentInfo();
+    }
+    const requestedInfo = await plugin.requestConsentInfo(buildConsentOptions(overrides));
+    const formInfo = overrides.showForm === false ? {} : await plugin.showConsentForm();
+    latestConsentInfo = {
+      ...(requestedInfo || {}),
+      ...(formInfo || {}),
+      isConsentFormAvailable: requestedInfo?.isConsentFormAvailable,
+    };
+    consentReady = Boolean(latestConsentInfo.canRequestAds);
+    const unityPrivacyReady = await syncUnityPrivacyMetadata(latestConsentInfo);
+    lastConsentError = unityPrivacyReady ? "" : "Unity privacy metadata could not be set.";
+    return {
+      consentInfo: getConsentInfoSnapshot(),
+      unityPrivacyReady,
+    };
+  }
+
+  async function ensureConsentBeforeAds(plugin) {
+    if (!supported || !["android", "ios"].includes(platform)) {
+      consentReady = true;
+      return true;
+    }
+    if (
+      !plugin
+      || typeof plugin.requestConsentInfo !== "function"
+      || typeof plugin.showConsentForm !== "function"
+    ) {
+      consentReady = false;
+      lastConsentError = "AdMob UMP consent APIs unavailable.";
+      return false;
+    }
+    try {
+      const { unityPrivacyReady } = await requestConsentFlow(plugin, {
+        reset: resetConsentOnInitialize,
+      });
+      if (!unityPrivacyReady || !consentReady) {
+        return false;
+      }
+      return true;
+    } catch (error) {
+      consentReady = false;
+      lastConsentError = String(error?.message || error || "Consent flow failed.");
+      return false;
     }
   }
 
@@ -204,9 +359,11 @@ export function createAdMobService(options = {}) {
 
   const initialize = async () => {
     if (!configured) {
+      lastAdInitStatus = supported ? "not-configured" : "unsupported";
       return false;
     }
     if (initialized) {
+      lastAdInitStatus = "initialized";
       return true;
     }
     if (initPromise) {
@@ -216,21 +373,34 @@ export function createAdMobService(options = {}) {
       const plugin = ensurePlugin();
       if (!plugin) {
         initialized = false;
+        lastAdInitStatus = "admob-plugin-missing";
         return false;
       }
       try {
+        const consentAllowed = await ensureConsentBeforeAds(plugin);
+        if (!consentAllowed) {
+          initialized = false;
+          lastAdInitStatus = consentReady ? "privacy-metadata-blocked" : "consent-blocked";
+          return false;
+        }
         await plugin.initialize({
           initializeForTesting: testing,
           tagForChildDirectedTreatment: false,
           tagForUnderAgeOfConsent: false,
         });
         initialized = true;
+        lastAdInitStatus = "initialized";
         await bindListeners();
         void prepareInterstitial();
         void prepareRewarded();
+        if (openAdInspectorOnInitialize) {
+          void openAdInspector();
+        }
         return true;
-      } catch {
+      } catch (error) {
         initialized = false;
+        lastAdInitStatus = "failed";
+        lastConsentError = String(error?.message || error || "AdMob initialize failed.");
         return false;
       } finally {
         initPromise = null;
@@ -238,6 +408,82 @@ export function createAdMobService(options = {}) {
     })();
     return initPromise;
   };
+
+  const openAdInspector = async () => {
+    const bridge = ensurePrivacyBridge();
+    if (!supported || platform !== "android" || !bridge || typeof bridge.openAdInspector !== "function") {
+      return false;
+    }
+    try {
+      await bridge.openAdInspector();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const runConsentDebug = async (overrides = {}) => {
+    const plugin = ensurePlugin();
+    if (!supported || !["android", "ios"].includes(platform)) {
+      lastAdInitStatus = "unsupported";
+      return {
+        ok: false,
+        reason: "Ad privacy debug only works inside native app.",
+        diagnostics: getDiagnostics(),
+      };
+    }
+    if (
+      !plugin
+      || typeof plugin.requestConsentInfo !== "function"
+      || typeof plugin.showConsentForm !== "function"
+    ) {
+      lastConsentError = "AdMob UMP consent APIs unavailable.";
+      return {
+        ok: false,
+        reason: lastConsentError,
+        diagnostics: getDiagnostics(),
+      };
+    }
+    try {
+      const result = await requestConsentFlow(plugin, overrides);
+      return {
+        ok: Boolean(result.consentInfo?.canRequestAds && result.unityPrivacyReady),
+        reason: "",
+        diagnostics: getDiagnostics(),
+      };
+    } catch (error) {
+      lastConsentError = String(error?.message || error || "Consent debug failed.");
+      return {
+        ok: false,
+        reason: lastConsentError,
+        diagnostics: getDiagnostics(),
+      };
+    }
+  };
+
+  function getConsentInfoSnapshot() {
+    return latestConsentInfo ? { ...latestConsentInfo } : null;
+  }
+
+  function getDiagnostics() {
+    return {
+      platform,
+      supported,
+      configured: Boolean(configured),
+      initialized,
+      consentReady,
+      consentInfo: getConsentInfoSnapshot(),
+      unityPrivacy: lastUnityPrivacyMetadata ? { ...lastUnityPrivacyMetadata } : null,
+      adInspectorAvailable: Boolean(
+        supported
+        && platform === "android"
+        && ensurePrivacyBridge()
+        && typeof ensurePrivacyBridge().openAdInspector === "function"
+      ),
+      lastAdInitStatus,
+      lastConsentError,
+    };
+  }
 
   const scheduleBannerRetry = () => {
     if (bannerRetryTimerId) {
@@ -485,7 +731,16 @@ export function createAdMobService(options = {}) {
     isConfigured() {
       return configured;
     },
+    getConsentInfo() {
+      return getConsentInfoSnapshot();
+    },
+    isConsentReady() {
+      return consentReady;
+    },
+    getDiagnostics,
     initialize,
+    runConsentDebug,
+    openAdInspector,
     setBannerVisible,
     removeBanner,
     showInterstitial,

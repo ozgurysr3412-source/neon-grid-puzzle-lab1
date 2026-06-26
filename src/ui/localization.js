@@ -12,7 +12,6 @@ const STRINGS = Object.freeze({
     relaxing_music: "Relaxing Music",
     relaxing_music_note: "Optional standalone music",
     back_to_game: "Back To Game",
-    remove_ads: "Remove Ads",
     badges: "Badges",
     leaderboard: "Leaderboard",
     restart_run: "Restart Run",
@@ -29,18 +28,12 @@ const STRINGS = Object.freeze({
     home: "Home",
     watch_ad_continue: "Watch Ad Continue",
     rewarded_today: "{count}/{limit} today",
-    native_android_only: "Native Android only",
-    ads_removed: "Ads Removed",
-    remove_ads_title: "Go Ad-Free",
-    remove_ads_desc_offer: "Removes in-game banner/interstitial ads. Rewarded ads stay optional for extra rewards.",
-    remove_ads_desc_active: "Gameplay banner/interstitial ads are disabled. Rewarded ads stay optional for extra rewards.",
+    native_android_only: "Native app only",
     already_active: "Already Active",
     close: "Close",
     processing: "Processing...",
     wait: "Wait...",
     not_now: "Not Now",
-    pay: "Pay {price}",
-    purchase_only_android: "Purchases are available on Google Play Android builds only.",
     journey: "Journey",
     journey_complete_all: "Complete all 100 levels to unlock!",
     journey_final_chest_locked: "The chest opens after Level 100",
@@ -60,20 +53,14 @@ const STRINGS = Object.freeze({
     start_level: "Start Level {level}",
     only_players_reached: "Only {percent}% of players made it this far",
     shop: "Shop",
-    shop_subtitle: "Boost your run with premium power packs",
+    shop_subtitle: "Collect daily rewards and keep playing",
     daily_reward: "Daily Reward",
+    bonus_reward: "Bonus Reward",
     ready: "Ready",
     locked: "Locked",
     available_in: "Available in: {value}",
     collect_reward: "Collect reward",
-    pack_starter_name: "Starter Pack",
-    pack_starter_meta: "Twist x6 • Hammer x4 • TNT x2",
-    pack_value_name: "Value Pack",
-    pack_value_meta: "Twist x14 • Hammer x9 • TNT x5",
-    pack_best_value_name: "Best Value Pack",
-    pack_best_value_meta: "Twist x30 • Hammer x18 • TNT x10",
-    pack_big_name: "Big Pack",
-    pack_big_meta: "Twist x70 • Hammer x40 • TNT x24 • Remove Ads Included",
+    watch_ad_reward: "Watch ad for reward",
     all: "All",
     unlocked: "Unlocked",
     no_ranking_data: "No ranking data yet",
@@ -94,7 +81,6 @@ const STRINGS = Object.freeze({
     close_settings: "Close settings",
     close_details: "Close details",
     close_badge_popup: "Close badge popup",
-    close_remove_ads_popup: "Close remove ads popup",
     rank_unlocked_summary: "{unlocked}/{total} unlocked",
     in_progress: "In progress - {progress}",
     status_unlocked: "Unlocked",
@@ -104,7 +90,6 @@ const STRINGS = Object.freeze({
     rewarded_not_ready: "Rewarded ad is not ready. Try again in a moment.",
     rewarded_not_completed: "Reward was not completed.",
     continue_unavailable: "Continue unavailable on this board. Try again.",
-    ads_removed_note: "Ads removed. Rewarded ads remain optional.",
     update_available: "New Update Available",
     update_message: "Update Grid Crown for the latest improvements and the best game experience.",
     update_now: "Update",
@@ -121,7 +106,6 @@ const STRINGS = Object.freeze({
     relaxing_music: "Rahatlatıcı Müzik",
     relaxing_music_note: "İsteğe bağlı bağımsız müzik",
     back_to_game: "Oyuna Dön",
-    remove_ads: "Reklam Kaldır",
     badges: "Rozetler",
     leaderboard: "Liderlik",
     restart_run: "Oyunu Yeniden Başlat",
@@ -138,18 +122,12 @@ const STRINGS = Object.freeze({
     home: "Ana Menü",
     watch_ad_continue: "Reklam İzle Devam Et",
     rewarded_today: "{count}/{limit} bugün",
-    native_android_only: "Sadece Android uygulamada",
-    ads_removed: "Reklamlar Kaldırıldı",
-    remove_ads_title: "Reklamsız Oyna",
-    remove_ads_desc_offer: "Oyun içi banner/geçiş reklamlarını kaldırır. Ödüllü reklamlar ekstra ödül için isteğe bağlı kalır.",
-    remove_ads_desc_active: "Oyun içi banner/geçiş reklamları kapalı. Ödüllü reklamlar ekstra ödül için isteğe bağlı kalır.",
+    native_android_only: "Yalnızca yerel uygulamada",
     already_active: "Zaten Aktif",
     close: "Kapat",
     processing: "İşleniyor...",
     wait: "Bekleyin...",
     not_now: "Şimdi Değil",
-    pay: "{price} Öde",
-    purchase_only_android: "Satın alma yalnızca Google Play Android sürümünde kullanılabilir.",
     journey: "Yolculuk",
     journey_complete_all: "Kilidi açmak için 100 seviyenin tamamını bitir!",
     journey_final_chest_locked: "Kasa 100. seviye tamamlandığında açılır",
@@ -169,20 +147,14 @@ const STRINGS = Object.freeze({
     start_level: "Seviye {level} Başlat",
     only_players_reached: "Oyuncuların sadece %{percent}'i buraya ulaştı",
     shop: "Mağaza",
-    shop_subtitle: "Premium güç paketleriyle oyununu güçlendir",
+    shop_subtitle: "Günlük ödülleri topla ve oynamaya devam et",
     daily_reward: "Günlük Ödül",
+    bonus_reward: "Bonus Ödül",
     ready: "Hazır",
     locked: "Kilitli",
     available_in: "Kalan süre: {value}",
     collect_reward: "Ödülü Topla",
-    pack_starter_name: "Başlangıç Paketi",
-    pack_starter_meta: "Twist x6 • Hammer x4 • TNT x2",
-    pack_value_name: "Avantaj Paketi",
-    pack_value_meta: "Twist x14 • Hammer x9 • TNT x5",
-    pack_best_value_name: "En İyi Paket",
-    pack_best_value_meta: "Twist x30 • Hammer x18 • TNT x10",
-    pack_big_name: "Büyük Paket",
-    pack_big_meta: "Twist x70 • Hammer x40 • TNT x24 • Reklam Kaldır Dahil",
+    watch_ad_reward: "Reklam izle, ödül al",
     all: "Tümü",
     unlocked: "Açılan",
     no_ranking_data: "Henüz sıralama verisi yok",
@@ -203,7 +175,6 @@ const STRINGS = Object.freeze({
     close_settings: "Ayarları kapat",
     close_details: "Detayı kapat",
     close_badge_popup: "Rozet penceresini kapat",
-    close_remove_ads_popup: "Reklam kaldır penceresini kapat",
     rank_unlocked_summary: "{unlocked}/{total} açıldı",
     in_progress: "Devam ediyor - {progress}",
     status_unlocked: "Açıldı",
@@ -213,7 +184,6 @@ const STRINGS = Object.freeze({
     rewarded_not_ready: "Ödüllü reklam hazır değil. Birazdan tekrar dene.",
     rewarded_not_completed: "Ödül tamamlanmadı.",
     continue_unavailable: "Bu tabloda devam kullanılamıyor. Tekrar dene.",
-    ads_removed_note: "Reklamlar kaldırıldı. Ödüllü reklamlar isteğe bağlı olarak kalır.",
     update_available: "Yeni Güncelleme Hazır",
     update_message: "En yeni iyileştirmeler ve en iyi oyun deneyimi için Grid Crown'u güncelle.",
     update_now: "Güncelle",
@@ -290,8 +260,10 @@ export function applyStaticTranslations() {
   setText("#menu-shop-screen .menu-shop-title", "shop");
   setText("#menu-shop-screen .menu-shop-subtitle", "shop_subtitle");
   setText("#menu-shop-screen .menu-shop-daily-kicker", "daily_reward");
+  setText("#menu-shop-screen .menu-shop-bonus-kicker", "bonus_reward");
   setText("#menu-shop-daily-status-pill", "locked");
   setText("#menu-shop-daily-claim-btn", "collect_reward");
+  setText("#menu-shop-bonus-claim-btn", "watch_ad_reward");
   setText(".settings-kicker", "settings");
   setText(".settings-title", "game_control");
   setIndexedText(".settings-label", 0, "sound");
@@ -301,7 +273,6 @@ export function applyStaticTranslations() {
   setIndexedText(".settings-label", 4, "relaxing_music");
   setText(".settings-label-note", "relaxing_music_note");
   setText("#settings-resume-btn", "back_to_game");
-  setText("#settings-remove-ads-btn", "remove_ads");
   setText("#settings-badges-btn", "badges");
   setText("#settings-leaderboard-btn", "leaderboard");
   setText("#settings-restart-btn", "restart_run");
@@ -321,14 +292,10 @@ export function applyStaticTranslations() {
   setText(".badge-unlock-kicker", "badge_unlocked");
   setText(".badge-unlock-reason-label", "reason");
   setText("#badge-unlock-close-btn", "awesome");
-  setText("#remove-ads-modal .modal-kicker", "remove_ads");
-  setText("#remove-ads-title", "remove_ads_title");
-  setText("#remove-ads-cancel-btn", "not_now");
   setAttr("#settings-close-btn", "aria-label", "close_settings");
   setAttr("#menu-badge-detail-backdrop", "aria-label", "close_details");
   setAttr("#menu-badge-detail-close", "aria-label", "close");
   setAttr("#badge-unlock-backdrop", "aria-label", "close_badge_popup");
-  setAttr("#remove-ads-backdrop", "aria-label", "close_remove_ads_popup");
   setText("#soft-update-title", "update_available");
   setText("#soft-update-message", "update_message");
   setText("#soft-update-open-btn", "update_now");
@@ -357,24 +324,4 @@ export function isTurkishLocale() {
 export function formatScoreByLocale(value) {
   const locale = currentLocale === "tr" ? "tr-TR" : "en-US";
   return Math.max(0, Math.floor(Number(value) || 0)).toLocaleString(locale);
-}
-
-export function getPackLocalizedText(pack) {
-  if (!pack || typeof pack !== "object") {
-    return { name: "", meta: "" };
-  }
-  const id = String(pack.id || "");
-  if (id === "starter") {
-    return { name: t("pack_starter_name"), meta: t("pack_starter_meta") };
-  }
-  if (id === "value") {
-    return { name: t("pack_value_name"), meta: t("pack_value_meta") };
-  }
-  if (id === "best-value") {
-    return { name: t("pack_best_value_name"), meta: t("pack_best_value_meta") };
-  }
-  if (id === "big") {
-    return { name: t("pack_big_name"), meta: t("pack_big_meta") };
-  }
-  return { name: String(pack.name || ""), meta: String(pack.meta || "") };
 }
