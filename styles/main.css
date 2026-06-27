@@ -396,9 +396,11 @@ body {
   font-family: "Space Grotesk", system-ui, sans-serif;
   background: var(--bg);
   color: var(--ink);
+  -webkit-text-size-adjust: 100%;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -431,6 +433,47 @@ body {
 .app-shell canvas {
   -webkit-user-drag: none;
   user-drag: none;
+  -webkit-touch-callout: none;
+}
+
+html.ios-device,
+html.ios-device body,
+html.ios-device .app-shell,
+html.ios-device .app-shell * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+html.ios-device .app-shell,
+html.ios-device .play-area,
+html.ios-device .board-wrap,
+html.ios-device .board,
+html.ios-device .cell,
+html.ios-device .piece-tray,
+html.ios-device .piece-card,
+html.ios-device .piece-cell,
+html.ios-device .drag-piece {
+  touch-action: none;
+}
+
+html.ios-device button,
+html.ios-device [role="button"],
+html.ios-device .menu-shop-open-btn,
+html.ios-device .menu-settings-btn {
+  touch-action: manipulation;
+}
+
+html.ios-device input,
+html.ios-device textarea,
+html.ios-device select,
+html.ios-device [contenteditable="true"],
+html.ios-device [data-allow-select="true"] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+  touch-action: manipulation;
 }
 
 

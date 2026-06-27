@@ -621,9 +621,30 @@ function shouldIgnoreCalloutSuppression(target) {
     return false;
   }
   return Boolean(
-    element.closest('input, textarea, [contenteditable="true"], [data-allow-select="true"]'),
+    element.closest('input, textarea, select, [contenteditable="true"], [data-allow-select="true"]'),
   );
 }
+
+function clearNativeTextSelection() {
+  try {
+    window.getSelection()?.removeAllRanges();
+  } catch {
+    // ignore
+  }
+}
+
+function suppressNativeGesture(event) {
+  const target = event?.target;
+  if (target instanceof Node && shouldIgnoreCalloutSuppression(target)) {
+    return;
+  }
+  event.preventDefault?.();
+  clearNativeTextSelection();
+}
+
+let lastTouchEndAtMs = 0;
+let lastTouchEndX = 0;
+let lastTouchEndY = 0;
 
 document.addEventListener("contextmenu", (event) => {
   const target = event.target;
@@ -633,7 +654,7 @@ document.addEventListener("contextmenu", (event) => {
   if (shouldIgnoreCalloutSuppression(target)) {
     return;
   }
-  event.preventDefault();
+  suppressNativeGesture(event);
 }, { capture: true });
 
 document.addEventListener("selectstart", (event) => {
@@ -644,7 +665,7 @@ document.addEventListener("selectstart", (event) => {
   if (shouldIgnoreCalloutSuppression(target)) {
     return;
   }
-  event.preventDefault();
+  suppressNativeGesture(event);
 }, { capture: true });
 
 document.addEventListener("dragstart", (event) => {
@@ -655,8 +676,35 @@ document.addEventListener("dragstart", (event) => {
   if (shouldIgnoreCalloutSuppression(target)) {
     return;
   }
-  event.preventDefault();
+  suppressNativeGesture(event);
 }, { capture: true });
+
+document.addEventListener("gesturestart", suppressNativeGesture, { capture: true, passive: false });
+document.addEventListener("gesturechange", suppressNativeGesture, { capture: true, passive: false });
+document.addEventListener("gestureend", suppressNativeGesture, { capture: true, passive: false });
+document.addEventListener("dblclick", suppressNativeGesture, { capture: true });
+
+document.addEventListener("touchstart", (event) => {
+  const target = event.target;
+  if (target instanceof Node && shouldIgnoreCalloutSuppression(target)) {
+    return;
+  }
+  if (event.touches?.length > 1) {
+    suppressNativeGesture(event);
+    return;
+  }
+  clearNativeTextSelection();
+}, { capture: true, passive: false });
+
+document.addEventListener("touchmove", (event) => {
+  const target = event.target;
+  if (target instanceof Node && shouldIgnoreCalloutSuppression(target)) {
+    return;
+  }
+  if (event.touches?.length > 1) {
+    suppressNativeGesture(event);
+  }
+}, { capture: true, passive: false });
 
 document.addEventListener("touchend", (event) => {
   const target = event.target;
@@ -666,12 +714,22 @@ document.addEventListener("touchend", (event) => {
   if (shouldIgnoreCalloutSuppression(target)) {
     return;
   }
-  try {
-    window.getSelection()?.removeAllRanges();
-  } catch {
-    // ignore
+  const touch = event.changedTouches?.[0];
+  const now = Date.now();
+  if (touch) {
+    const dx = touch.clientX - lastTouchEndX;
+    const dy = touch.clientY - lastTouchEndY;
+    const isDoubleTap = (now - lastTouchEndAtMs) < 360 && ((dx * dx) + (dy * dy)) < 1225;
+    lastTouchEndAtMs = now;
+    lastTouchEndX = touch.clientX;
+    lastTouchEndY = touch.clientY;
+    if (isDoubleTap) {
+      suppressNativeGesture(event);
+      return;
+    }
   }
-}, { capture: true });
+  clearNativeTextSelection();
+}, { capture: true, passive: false });
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
