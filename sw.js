@@ -1,4 +1,4 @@
-const CACHE_NAME = "luma-blocks-v54-size-opt";
+const CACHE_NAME = "luma-blocks-v55-ios-hardening";
 const CORE_ASSETS = [
   "/",
   "/index.html",

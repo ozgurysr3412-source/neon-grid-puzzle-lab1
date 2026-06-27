@@ -18,7 +18,7 @@ import {
   detectAndApplyLocale,
   t,
 } from "./ui/localization.js";
-import { UIManager } from "./ui/uiManager.js?v=logo-fast-1";
+import { UIManager } from "./ui/uiManager.js?v=20260627ioshard2";
 import { resolveClearMessagePolicy } from "./ui/clearMessagePolicy.js";
 import {
   getScoreThemeBand,

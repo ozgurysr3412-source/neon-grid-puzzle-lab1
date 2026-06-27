@@ -1,9 +1,10 @@
 import UIKit
 import Capacitor
 import AVFoundation
+import WebKit
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, UIScrollViewDelegate {
 
     var window: UIWindow?
 
@@ -15,7 +16,48 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         } catch {
             print("Audio session setup failed: \(error.localizedDescription)")
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            self.lockWebViewNativeGestures()
+        }
         return true
+    }
+
+    private func lockWebViewNativeGestures() {
+        guard let bridgeViewController = window?.rootViewController as? CAPBridgeViewController else {
+            return
+        }
+        guard let webView = bridgeViewController.webView else {
+            return
+        }
+        webView.allowsBackForwardNavigationGestures = false
+        webView.allowsLinkPreview = false
+
+        let scrollView = webView.scrollView
+        scrollView.delegate = self
+        scrollView.minimumZoomScale = 1.0
+        scrollView.maximumZoomScale = 1.0
+        scrollView.zoomScale = 1.0
+        scrollView.bouncesZoom = false
+        scrollView.pinchGestureRecognizer?.isEnabled = false
+        scrollView.panGestureRecognizer.maximumNumberOfTouches = 1
+        scrollView.delaysContentTouches = false
+        scrollView.canCancelContentTouches = true
+
+        (webView.gestureRecognizers ?? []).forEach(disableSelectionGesture)
+        (scrollView.gestureRecognizers ?? []).forEach(disableSelectionGesture)
+    }
+
+    private func disableSelectionGesture(_ gesture: UIGestureRecognizer) {
+        if gesture is UILongPressGestureRecognizer {
+            gesture.isEnabled = false
+        }
+        if gesture is UIPinchGestureRecognizer {
+            gesture.isEnabled = false
+        }
+    }
+
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        return nil
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
@@ -34,6 +76,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.lockWebViewNativeGestures()
+        }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

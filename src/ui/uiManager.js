@@ -2599,7 +2599,7 @@ export class UIManager {
           cell.classList.toggle("cell--objective-core", useSingleLayerObjective);
           cell.classList.add("cell--filled");
           cell.dataset.objectiveType = objectiveType;
-          const objectiveIcon = useSingleLayerObjective
+          const objectiveIcon = useSingleLayerObjective && objectiveType === "crown"
             ? ADVENTURE_OBJECTIVE_CORE_BY_TYPE[objectiveType]
             : ADVENTURE_VISUALS[objectiveType].icon;
           cell.style.backgroundImage = `url("${objectiveIcon}")`;
