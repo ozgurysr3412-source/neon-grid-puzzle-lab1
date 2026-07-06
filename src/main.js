@@ -3147,12 +3147,16 @@ async function runAdPrivacyDebugActions() {
   if (!isNativeAdPrivacySupported) {
     logAdPrivacyDebug(
       wantsInspector
-        ? "Ad Inspector only works inside Android app."
+        ? "Ad Inspector is not available on this platform."
         : "Native ad privacy controls only work inside native app.",
       adMobService.getDiagnostics(),
     );
     updateAdPrivacyDebugPanel();
     return;
+  }
+
+  if (ADMOB_PLATFORM === "ios") {
+    await appTrackingTransparencyService.requestPermission();
   }
 
   if (wantsConsentReset || wantsConsentInfo || hasConsentGeo) {

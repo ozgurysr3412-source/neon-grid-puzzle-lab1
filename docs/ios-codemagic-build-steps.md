@@ -48,4 +48,4 @@ cd ../..
 - Banner: oyun icinde alt alanda gorunmeli.
 - Interstitial: oyun akisinda tetiklenen noktalarda acilmali.
 - Rewarded: Continue/odul akisinda acilmali.
-- Remove Ads satin alimindan sonra banner/interstitial kapanmali, rewarded acik kalmali.
+- iOS build reklam gelir modeliyle calisir; IAP/Remove Ads akisi bulunmamalidir.

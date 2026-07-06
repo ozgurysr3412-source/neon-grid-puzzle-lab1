@@ -50,7 +50,7 @@ assert.match(adMobServiceSource, /getDiagnostics/);
 assert.match(main, /adConsentGeo/);
 assert.match(main, /adConsentInfo/);
 assert.match(main, /ad-privacy-debug-panel/);
-assert.match(main, /Ad Inspector only works inside Android app/);
+assert.match(main, /Ad Inspector is not available on this platform/);
 assert.match(main, /GridCrownAds/);
 
 function createNativeAdMock() {
