@@ -19,7 +19,14 @@ function getPlatform(bridge) {
 
 function getPlugin(bridge) {
   try {
-    return bridge?.Plugins?.PhotoLibraryPicker || null;
+    const existing = bridge?.Plugins?.PhotoLibraryPicker || null;
+    if (existing) {
+      return existing;
+    }
+    if (typeof bridge?.registerPlugin === "function") {
+      return bridge.registerPlugin("PhotoLibraryPicker");
+    }
+    return null;
   } catch {
     return null;
   }

@@ -3333,7 +3333,7 @@ async function applySelectedPhotoBoardDataUrl(dataUrl, { inputBytes = 0 } = {}) 
 }
 
 async function openPhotoBoardPicker() {
-  if (photoLibraryPickerService.isSupported()) {
+  if (isNativeIosRuntime()) {
     const result = await photoLibraryPickerService.pickImage();
     if (!result.ok) {
       if (!result.cancelled) {
