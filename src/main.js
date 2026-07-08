@@ -12,6 +12,7 @@ import { createAdMobService } from "./platform/adMobService.js";
 import { createAppTrackingTransparencyService } from "./platform/appTrackingTransparencyService.js";
 import { createInAppReviewService } from "./platform/inAppReviewService.js";
 import { createLocalNotificationService } from "./platform/localNotificationService.js";
+import { createPhotoLibraryPickerService } from "./platform/photoLibraryPickerService.js";
 import { mountJourneyScreenPartial } from "./ui/journey/journeyScreenPartial.js";
 import {
   applyStaticTranslations,
@@ -813,6 +814,32 @@ const ADMOB_PLATFORM = (() => {
     return "web";
   }
 })();
+function getRuntimePlatform() {
+  try {
+    const bridge = window?.Capacitor;
+    if (!bridge) {
+      return "web";
+    }
+    if (typeof bridge.getPlatform === "function") {
+      return String(bridge.getPlatform() || "web");
+    }
+    return String(bridge.platform || "web");
+  } catch {
+    return "web";
+  }
+}
+function isNativeIosRuntime() {
+  if (getRuntimePlatform() === "ios") {
+    return true;
+  }
+  try {
+    const ua = window.navigator?.userAgent || "";
+    const touchMac = /Macintosh/i.test(ua) && Number(window.navigator?.maxTouchPoints || 0) > 1;
+    return /iPhone|iPad|iPod/i.test(ua) || touchMac;
+  } catch {
+    return false;
+  }
+}
 const SCREENSHOT_MODE = (() => {
   try {
     const params = new URLSearchParams(window.location.search || "");
@@ -958,7 +985,7 @@ const UPDATE_PROMPT_PREVIEW = (() => {
   }
 })();
 const SCREENSHOT_JOURNEY_UNLOCK_LEVEL = 10;
-const ADMOB_ACTIVE_IDS = ADMOB_PLATFORM === "ios"
+const ADMOB_ACTIVE_IDS = (ADMOB_PLATFORM === "ios" || isNativeIosRuntime())
   ? {
       appId: ADMOB_IOS_APP_ID,
       bannerAdId: ADMOB_IOS_BANNER_ID,
@@ -983,6 +1010,7 @@ const audio = new SoundManager();
 void audio.prewarmForGameplay?.();
 const haptics = new Haptics();
 const appTrackingTransparencyService = createAppTrackingTransparencyService();
+const photoLibraryPickerService = createPhotoLibraryPickerService();
 const powerHub = initPowerHubUi({ state, ui });
 const smartPraiseState = {
   lastTurn: -99,
@@ -3155,9 +3183,7 @@ async function runAdPrivacyDebugActions() {
     return;
   }
 
-  if (ADMOB_PLATFORM === "ios") {
-    await appTrackingTransparencyService.requestPermission();
-  }
+  await requestIosTrackingPermissionBeforeAds();
 
   if (wantsConsentReset || wantsConsentInfo || hasConsentGeo) {
     const result = await adMobService.runConsentDebug({
@@ -3288,6 +3314,39 @@ async function rebuildClassicPhotoBoardTiles(dataUrl, { inputBytes = 0 } = {}) {
 
   syncClassicPhotoBoardConfig();
   syncClassicPhotoBoardSettingsUi();
+}
+
+async function applySelectedPhotoBoardDataUrl(dataUrl, { inputBytes = 0 } = {}) {
+  const safeDataUrl = typeof dataUrl === "string" ? dataUrl.trim() : "";
+  if (!safeDataUrl.startsWith("data:image/")) {
+    return false;
+  }
+  await rebuildClassicPhotoBoardTiles(safeDataUrl, { inputBytes });
+  if (classicPhotoBoardReady) {
+    runtimeSettings.photoBoardEnabled = true;
+    saveRuntimeSettings(runtimeSettings);
+    syncSettingsPanelState();
+    ui.render(state.getSnapshot());
+    return true;
+  }
+  return false;
+}
+
+async function openPhotoBoardPicker() {
+  if (photoLibraryPickerService.isSupported()) {
+    const result = await photoLibraryPickerService.pickImage();
+    if (!result.ok) {
+      if (!result.cancelled) {
+        console.warn("[photo-board] Native photo library picker failed.", result.reason || result);
+      }
+      return false;
+    }
+    return applySelectedPhotoBoardDataUrl(result.dataUrl, {
+      inputBytes: estimateDataUrlBytes(result.dataUrl),
+    });
+  }
+  settingsPhotoPickerInput?.click();
+  return false;
 }
 
 function syncMonetizationUiState() {
@@ -4552,18 +4611,35 @@ function scheduleStartupTask(taskName, task, delayMs = 0) {
   }, Math.max(0, Number(delayMs) || 0));
 }
 
+let iosAttStartupPromise = null;
+function requestIosTrackingPermissionBeforeAds() {
+  if (!isNativeIosRuntime()) {
+    return Promise.resolve({ ok: true, status: "not-required" });
+  }
+  if (!iosAttStartupPromise) {
+    iosAttStartupPromise = appTrackingTransparencyService.requestPermission({ timeoutMs: 5000 })
+      .catch((error) => {
+        console.warn("[att] startup request failed.", error);
+        return { ok: false, status: "not-available" };
+      });
+  }
+  return iosAttStartupPromise;
+}
+
 function initStartupServicesSafely() {
   // iOS App Store review expects ATT before ad SDK initialization on a fresh install.
-  const isIos = ADMOB_PLATFORM === "ios";
+  const isIos = isNativeIosRuntime();
+
+  if (isIos) {
+    scheduleStartupTask("att-permission", () => requestIosTrackingPermissionBeforeAds(), 350);
+  }
 
   scheduleStartupTask("daily-reward-reminder", () => {
     rescheduleDailyRewardReminder({ requestPermission: false });
   }, isIos ? 3000 : 1200);
 
   scheduleStartupTask("admob-initialize", async () => {
-    if (isIos) {
-      await appTrackingTransparencyService.requestPermission();
-    }
+    await requestIosTrackingPermissionBeforeAds();
     const initialized = await adMobService.initialize();
     updateAdPrivacyDebugPanel();
     if (!initialized) {
@@ -4659,13 +4735,7 @@ if (settingsPhotoPickerInput) {
     await primeAudioForInteraction();
     try {
       const rawDataUrl = await fileToDataUrl(file);
-      await rebuildClassicPhotoBoardTiles(rawDataUrl, { inputBytes: Number(file.size || 0) });
-      if (classicPhotoBoardReady) {
-        runtimeSettings.photoBoardEnabled = true;
-        saveRuntimeSettings(runtimeSettings);
-        syncSettingsPanelState();
-        ui.render(state.getSnapshot());
-      }
+      await applySelectedPhotoBoardDataUrl(rawDataUrl, { inputBytes: Number(file.size || 0) });
     } catch (error) {
       console.warn("[photo-board] Could not apply selected photo.", error);
     }
@@ -4886,7 +4956,7 @@ ui.bindControls({
       if (classicPhotoBoardImageDataUrl) {
         await rebuildClassicPhotoBoardTiles(classicPhotoBoardImageDataUrl);
       } else {
-        settingsPhotoPickerInput?.click();
+        await openPhotoBoardPicker();
       }
     }
     if (classicPhotoBoardReady) {
@@ -4898,7 +4968,7 @@ ui.bindControls({
   },
   onSettingsPickPhotoBoard: async () => {
     await primeAudioForInteraction();
-    settingsPhotoPickerInput?.click();
+    await openPhotoBoardPicker();
   },
   onSettingsClearPhotoBoard: async () => {
     await primeAudioForInteraction();
@@ -4964,7 +5034,7 @@ ui.bindControls({
     if (snapshot.mode !== "classic") {
       return;
     }
-    settingsPhotoPickerInput?.click();
+    await openPhotoBoardPicker();
   },
   onQuickPhotoClear: async () => {
     await primeAudioForInteraction();

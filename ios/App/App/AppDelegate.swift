@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import AppTrackingTransparency
 import AVFoundation
 import WebKit
 
@@ -7,6 +8,7 @@ import WebKit
 class AppDelegate: UIResponder, UIApplicationDelegate, UIScrollViewDelegate {
 
     var window: UIWindow?
+    private var trackingAuthorizationRequestScheduled = false
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         do {
@@ -60,6 +62,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIScrollViewDelegate {
         return nil
     }
 
+    private func requestTrackingAuthorizationOnFirstLaunch() {
+        guard #available(iOS 14, *) else {
+            return
+        }
+        guard !trackingAuthorizationRequestScheduled else {
+            return
+        }
+        guard ATTrackingManager.trackingAuthorizationStatus == .notDetermined else {
+            return
+        }
+        trackingAuthorizationRequestScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            guard UIApplication.shared.applicationState == .active else {
+                self.trackingAuthorizationRequestScheduled = false
+                return
+            }
+            guard ATTrackingManager.trackingAuthorizationStatus == .notDetermined else {
+                return
+            }
+            ATTrackingManager.requestTrackingAuthorization { status in
+                print("ATT authorization status: \(status.rawValue)")
+            }
+        }
+    }
+
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
         // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
@@ -76,6 +103,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIScrollViewDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        requestTrackingAuthorizationOnFirstLaunch()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             self.lockWebViewNativeGestures()
         }

@@ -12,6 +12,7 @@
 		4A8F10B62CDE4AB89D510003 /* AdPrivacyBridgePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A8F10B62CDE4AB89D510004 /* AdPrivacyBridgePlugin.swift */; };
 		4A8F10B62CDE4AB89D510001 /* AppTrackingTransparencyPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A8F10B62CDE4AB89D510002 /* AppTrackingTransparencyPlugin.swift */; };
 		4A8F10B62CDE4AB89D510005 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4A8F10B62CDE4AB89D510006 /* PrivacyInfo.xcprivacy */; };
+		4A8F10B62CDE4AB89D510007 /* PhotoLibraryPickerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A8F10B62CDE4AB89D510008 /* PhotoLibraryPickerPlugin.swift */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
@@ -26,6 +27,7 @@
 		4A8F10B62CDE4AB89D510004 /* AdPrivacyBridgePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdPrivacyBridgePlugin.swift; sourceTree = "<group>"; };
 		4A8F10B62CDE4AB89D510002 /* AppTrackingTransparencyPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTrackingTransparencyPlugin.swift; sourceTree = "<group>"; };
 		4A8F10B62CDE4AB89D510006 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4A8F10B62CDE4AB89D510008 /* PhotoLibraryPickerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryPickerPlugin.swift; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
@@ -83,6 +85,7 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				4A8F10B62CDE4AB89D510002 /* AppTrackingTransparencyPlugin.swift */,
 				4A8F10B62CDE4AB89D510004 /* AdPrivacyBridgePlugin.swift */,
+				4A8F10B62CDE4AB89D510008 /* PhotoLibraryPickerPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -222,6 +225,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				4A8F10B62CDE4AB89D510001 /* AppTrackingTransparencyPlugin.swift in Sources */,
 				4A8F10B62CDE4AB89D510003 /* AdPrivacyBridgePlugin.swift in Sources */,
+				4A8F10B62CDE4AB89D510007 /* PhotoLibraryPickerPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
