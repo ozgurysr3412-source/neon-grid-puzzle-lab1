@@ -845,8 +845,6 @@ export class UIManager {
       settingsPhotoBoardToggleBtn: document.getElementById("settings-photo-board-toggle-btn"),
       settingsPhotoBoardPickBtn: document.getElementById("settings-photo-board-pick-btn"),
       settingsPhotoBoardClearBtn: document.getElementById("settings-photo-board-clear-btn"),
-      settingsBadgesBtn: document.getElementById("settings-badges-btn"),
-      settingsLeaderboardBtn: document.getElementById("settings-leaderboard-btn"),
       settingsResumeBtn: document.getElementById("settings-resume-btn"),
       settingsRestartBtn: document.getElementById("settings-restart-btn"),
       settingsHomeBtn: document.getElementById("settings-home-btn"),
@@ -898,8 +896,6 @@ export class UIManager {
     onSettingsTogglePhotoBoard,
     onSettingsPickPhotoBoard,
     onSettingsClearPhotoBoard,
-    onSettingsBadges,
-    onSettingsLeaderboard,
     onSettingsResume,
     onSettingsRestart,
     onSettingsHome,
@@ -1002,8 +998,6 @@ export class UIManager {
     this.elements.settingsPhotoBoardToggleBtn?.addEventListener("click", onSettingsTogglePhotoBoard);
     this.elements.settingsPhotoBoardPickBtn?.addEventListener("click", onSettingsPickPhotoBoard);
     this.elements.settingsPhotoBoardClearBtn?.addEventListener("click", onSettingsClearPhotoBoard);
-    this.elements.settingsBadgesBtn?.addEventListener("click", onSettingsBadges);
-    this.elements.settingsLeaderboardBtn?.addEventListener("click", onSettingsLeaderboard);
     this.elements.settingsResumeBtn?.addEventListener("click", onSettingsResume);
     this.elements.settingsRestartBtn?.addEventListener("click", onSettingsRestart);
     this.elements.settingsHomeBtn?.addEventListener("click", onSettingsHome);
@@ -1762,8 +1756,6 @@ export class UIManager {
       settingsPhotoBoardToggleBtn,
       settingsPhotoBoardPickBtn,
       settingsPhotoBoardClearBtn,
-      settingsBadgesBtn,
-      settingsLeaderboardBtn,
       settingsResumeBtn,
       settingsRestartBtn,
       settingsHomeBtn,
@@ -1816,12 +1808,6 @@ export class UIManager {
     if (settingsPhotoBoardClearBtn) {
       settingsPhotoBoardClearBtn.disabled = !photoBoardReady;
       settingsPhotoBoardClearBtn.classList.toggle("is-disabled", !photoBoardReady);
-    }
-    if (settingsBadgesBtn) {
-      settingsBadgesBtn.style.display = "";
-    }
-    if (settingsLeaderboardBtn) {
-      settingsLeaderboardBtn.style.display = "";
     }
     if (settingsResumeBtn) {
       settingsResumeBtn.style.display = canResume ? "" : "none";

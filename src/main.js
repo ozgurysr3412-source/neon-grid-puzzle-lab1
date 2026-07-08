@@ -4979,34 +4979,6 @@ ui.bindControls({
     syncSettingsPanelState();
     ui.render(state.getSnapshot());
   },
-  onSettingsBadges: async () => {
-    await primeAudioForInteraction();
-    audio.playUiTap({ id: "settings-badges" });
-    const snapshot = state.getSnapshot();
-    const fromGameSettings = ui.settingsPanel.source === "game" && snapshot.status === "paused";
-    closeSettingsPanel({ resumeGame: false });
-    ui.openMenuBadgesView({ context: fromGameSettings ? "settings" : "menu" });
-  },
-  onSettingsLeaderboard: async () => {
-    await primeAudioForInteraction();
-    audio.playUiTap({ id: "open-leaderboard" });
-    const snapshot = state.getSnapshot();
-    const fromGameSettings = ui.settingsPanel.source === "game" && snapshot.status === "paused";
-    closeSettingsPanel({ resumeGame: false });
-    const fallbackData = buildLeaderboardPrototypeData(snapshot, leaderboardProfile);
-    ui.openMenuLeaderboardView({
-      context: fromGameSettings ? "settings" : "menu",
-      initialTab: ui.menuLeaderboardTab,
-      ...fallbackData,
-      profileLocked: Boolean(leaderboardProfile.profileLocked),
-    });
-    const leaderboardData = await buildLeaderboardData(snapshot, leaderboardProfile, { syncScores: true });
-    ui.setMenuLeaderboardData({
-      ...leaderboardData,
-      activeTab: ui.menuLeaderboardTab,
-      profileLocked: Boolean(leaderboardProfile.profileLocked),
-    });
-  },
   onSettingsResume: () => {
     void primeAudioForInteraction();
     audio.playUiTap({ id: "settings-resume" });

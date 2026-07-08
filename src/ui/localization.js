@@ -273,8 +273,6 @@ export function applyStaticTranslations() {
   setIndexedText(".settings-label", 4, "relaxing_music");
   setText(".settings-label-note", "relaxing_music_note");
   setText("#settings-resume-btn", "back_to_game");
-  setText("#settings-badges-btn", "badges");
-  setText("#settings-leaderboard-btn", "leaderboard");
   setText("#settings-restart-btn", "restart_run");
   setText("#settings-home-btn", "back_to_home");
   setText(".gameover-heading", "game_over");
