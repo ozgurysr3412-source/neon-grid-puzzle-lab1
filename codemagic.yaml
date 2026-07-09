@@ -30,6 +30,10 @@ workflows:
         script: |
           npx cap sync ios
 
+      - name: Register app iOS plugins
+        script: |
+          node scripts/register-ios-app-plugins.mjs
+
       - name: Ensure AdMob plist key
         script: |
           /usr/libexec/PlistBuddy -c "Set :GADApplicationIdentifier $ADMOB_IOS_APP_ID" ios/App/App/Info.plist || \
@@ -96,6 +100,10 @@ workflows:
       - name: Sync Capacitor iOS project
         script: |
           npx cap sync ios
+
+      - name: Register app iOS plugins
+        script: |
+          node scripts/register-ios-app-plugins.mjs
 
       - name: Ensure AdMob plist key
         script: |
