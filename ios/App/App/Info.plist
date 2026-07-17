@@ -332,9 +332,9 @@
 			</dict>
 		</array>
 		<key>NSUserTrackingUsageDescription</key>
-		<string>Bu kimlik, size daha uygun reklam deneyimi sunmak icin kullanilir.</string>
+		<string>This identifier is used to provide a more relevant advertising experience.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Galeri fotografini oyun tahtasi gorseli olarak kullanmak icin fotograf secimine izin verilir.</string>
+		<string>Allow photo access to select an image for the game board.</string>
 		<key>UILaunchStoryboardName</key>
 		<string>LaunchScreen</string>
 		<key>UIMainStoryboardFile</key>
