@@ -1,8 +1,8 @@
-# Grid Crown Block Blast Privacy Policy
+# Grid Crown: Block Puzzle Privacy Policy
 
-Effective date: May 13, 2026
+Effective date: July 27, 2026
 
-Grid Crown Block Blast ("we", "our", "us") respects your privacy. This policy explains what data may be processed when you use the app.
+Grid Crown: Block Puzzle ("we", "our", "us") respects your privacy. This policy explains what data may be processed when you use the app.
 
 ## 1. Data We May Process
 
